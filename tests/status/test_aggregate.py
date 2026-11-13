@@ -18,6 +18,18 @@ def test_mixed_is_progressing():
     assert aggregate(states) == StackState.Deploying
 
 
+def test_state_transition_after_failure_is_not_deduped():
+    deduper = EventDeduper()
+    healthy = StatusEvent(stack_id="s1", component="web", state=CompState.Healthy)
+    failed = StatusEvent(stack_id="s1", component="web", state=CompState.Failed)
+    assert deduper.seen(healthy) is False
+    assert deduper.seen(failed) is False
+    # Recovery is a genuine transition, not a duplicate.
+    assert deduper.seen(healthy) is False
+    # A true duplicate in a row is still a no-op.
+    assert deduper.seen(healthy) is True
+
+
 def test_duplicate_event_is_noop():
     deduper = EventDeduper()
     event = StatusEvent(stack_id="s1", component="web", state=CompState.Healthy)

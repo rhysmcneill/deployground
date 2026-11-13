@@ -27,28 +27,32 @@ def aggregate(component_states: dict[str, CompState]) -> StackState:
 
 
 class EventDeduper:
-    """Idempotency guard keyed by ``(stack_id, component, state)``.
+    """Idempotency guard with last-state-per-component semantics.
 
-    ``seen`` records the event and returns False the first time a key is seen,
-    and True (a no-op) for any repeat. Thread-safe.
+    Tracks the last state recorded for each ``(stack_id, component)``.
+    ``seen`` returns True (a no-op duplicate) only when the event's state equals
+    that last recorded state, i.e. a repeated event in a row. Any other event
+    (including a first sighting, or a genuine transition such as
+    Healthy -> Failed -> Healthy) records the new state and returns False, so a
+    recovered component is never stuck in its earlier state. Thread-safe.
 
-    ``clear(stack_id)`` forgets every recorded key for a stack; the thread
+    ``clear(stack_id)`` forgets the recorded states for a stack; the thread
     updater calls it when a stack is destroyed so memory does not grow unbounded,
     and so a re-created stack with the same id starts fresh.
     """
 
     def __init__(self) -> None:
         self._lock = threading.Lock()
-        self._seen: set[tuple[str, str, CompState]] = set()
+        self._last: dict[tuple[str, str], CompState] = {}
 
     def seen(self, event: StatusEvent) -> bool:
-        key = (event.stack_id, event.component, event.state)
+        key = (event.stack_id, event.component)
         with self._lock:
-            if key in self._seen:
+            if self._last.get(key) is event.state:
                 return True
-            self._seen.add(key)
+            self._last[key] = event.state
             return False
 
     def clear(self, stack_id: str) -> None:
         with self._lock:
-            self._seen = {key for key in self._seen if key[0] != stack_id}
+            self._last = {key: state for key, state in self._last.items() if key[0] != stack_id}
