@@ -58,7 +58,16 @@ def make_config() -> Config:
                     }
                 },
             },
-            "environments": {},
+            "environments": {
+                name: {
+                    "cluster": cluster,
+                    "repo": "deploys",
+                    "autoMerge": True,
+                    "ttl": {},
+                    "requiresApproval": False,
+                }
+                for name, cluster in (("dev", "dev-cluster"), ("prod", "prod-eks"))
+            },
             "stacks": {},
             "deployTarget": {
                 "type": "applicationset",
@@ -113,14 +122,18 @@ def test_delete_files_targets_all_components():
 
 def test_bootstrap_applicationset_templates_labels_annotations_and_subscription():
     manifests = ApplicationSetTarget(CFG, REPO).bootstrap_manifests(make_config())
-    assert set(manifests) == {"applicationset.yaml", "argocd-notifications-cm.yaml"}
-    appset = yaml.safe_load(manifests["applicationset.yaml"])
+    assert set(manifests) == {
+        "applicationset-dev.yaml",
+        "applicationset-prod.yaml",
+        "argocd-notifications-cm.yaml",
+    }
+    appset = yaml.safe_load(manifests["applicationset-dev.yaml"])
     assert appset["kind"] == "ApplicationSet"
 
     gen = appset["spec"]["generators"][0]["git"]
     assert gen["repoURL"] == "https://github.com/acme/deploys.git"
     assert gen["revision"] == "main"
-    assert gen["files"] == [{"path": "*/*/*/config.yaml"}]
+    assert gen["files"] == [{"path": "dev/*/*/config.yaml"}]
 
     tmpl = appset["spec"]["template"]
     assert tmpl["metadata"]["labels"] == {
@@ -146,3 +159,14 @@ def test_bootstrap_applicationset_templates_labels_annotations_and_subscription(
     assert "template.deployground-status" in cm["data"]
     for trigger in TRIGGERS:
         assert f"trigger.{trigger}" in cm["data"]
+
+
+def test_bootstrap_one_applicationset_per_env_with_its_cluster():
+    manifests = ApplicationSetTarget(CFG, REPO).bootstrap_manifests(make_config())
+    dev = yaml.safe_load(manifests["applicationset-dev.yaml"])
+    prod = yaml.safe_load(manifests["applicationset-prod.yaml"])
+    assert dev["metadata"]["name"] == "deployground-dev"
+    assert prod["metadata"]["name"] == "deployground-prod"
+    assert dev["spec"]["template"]["spec"]["destination"]["name"] == "dev-cluster"
+    assert prod["spec"]["template"]["spec"]["destination"]["name"] == "prod-eks"
+    assert prod["spec"]["generators"][0]["git"]["files"] == [{"path": "prod/*/*/config.yaml"}]

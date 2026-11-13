@@ -6,7 +6,6 @@ generator turns every file into an Application, stamping the selector labels and
 metadata annotations from the file's `deployground:` block.
 """
 
-import re
 from typing import Any
 
 import yaml
@@ -94,17 +93,23 @@ class ApplicationSetTarget:
         ]
 
     def bootstrap_manifests(self, config: Config) -> dict[str, str]:
-        return {
-            "applicationset.yaml": yaml.safe_dump(self._applicationset(), sort_keys=False),
-            "argocd-notifications-cm.yaml": yaml.safe_dump(
-                _notifications_cm(config), sort_keys=False
-            ),
+        # One ApplicationSet per environment: each targets that env's cluster and only
+        # watches that env's subtree of the owned path.
+        manifests = {
+            f"applicationset-{env_name}.yaml": yaml.safe_dump(
+                self._applicationset(env_name, env.cluster), sort_keys=False
+            )
+            for env_name, env in config.environments.items()
         }
+        manifests["argocd-notifications-cm.yaml"] = yaml.safe_dump(
+            _notifications_cm(config), sort_keys=False
+        )
+        return manifests
 
-    def _applicationset(self) -> dict[str, Any]:
+    def _applicationset(self, env_name: str, cluster: str) -> dict[str, Any]:
         repo_url = f"https://github.com/{self._repo_ref.owner}/{self._repo_ref.name}.git"
-        # `{env}/{stack}/{component}/config.yaml` -> `*/*/*/config.yaml`
-        glob = re.sub(r"\{[^}]*\}", "*", self._cfg.pathTemplate)
+        # `{env}/{stack}/{component}/config.yaml` -> `dev/*/*/config.yaml`
+        glob = self._path("*", env_name, "*")
 
         labels = {
             LABEL_STACK: _ref("stack"),
@@ -121,7 +126,7 @@ class ApplicationSetTarget:
         return {
             "apiVersion": "argoproj.io/v1alpha1",
             "kind": "ApplicationSet",
-            "metadata": {"name": "deployground", "namespace": "argocd"},
+            "metadata": {"name": f"deployground-{env_name}", "namespace": "argocd"},
             "spec": {
                 "generators": [
                     {
@@ -147,9 +152,8 @@ class ApplicationSetTarget:
                             "path": "golden-path",
                             "helm": {"valueFiles": ["../{{path.path}}/{{path.filename}}"]},
                         },
-                        # Environment name doubles as the ArgoCD cluster name; the stack
-                        # name is the namespace. Review before applying.
-                        "destination": {"name": _ref("env"), "namespace": _ref("stack")},
+                        # The env's configured ArgoCD cluster; the stack is the namespace.
+                        "destination": {"name": cluster, "namespace": _ref("stack")},
                         "syncPolicy": {
                             "automated": {"prune": True, "selfHeal": True},
                             "syncOptions": ["CreateNamespace=true"],
@@ -183,6 +187,7 @@ def _notifications_cm(config: Config) -> dict[str, Any]:
     data: dict[str, str] = {
         f"service.webhook.{NOTIFICATION_SERVICE}": yaml.safe_dump(
             {
+                # Placeholder host: adjust to wherever the bot's webhook is reachable.
                 "url": f"http://deployground.deployground.svc.cluster.local{webhook_path}",
                 "headers": [{"name": "Content-Type", "value": "application/json"}],
             },
