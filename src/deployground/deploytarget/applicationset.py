@@ -1,0 +1,212 @@
+"""Default deploy target: one config file per component, picked up by an ApplicationSet.
+
+Each component file holds the workload fields the golden-path chart consumes plus the
+durable `deployground:` metadata block. An ArgoCD ApplicationSet with a Git file
+generator turns every file into an Application, stamping the selector labels and
+metadata annotations from the file's `deployground:` block.
+"""
+
+import re
+from typing import Any
+
+import yaml
+
+from deployground.catalog import ResolvedComponent
+from deployground.config.models import Config, DeployTargetCfg, RepoRef
+from deployground.git.base import FileChange
+from deployground.metadata import (
+    ANNOTATION_PREFIX,
+    BLOCK_KEY,
+    LABEL_COMPONENT,
+    LABEL_MANAGED,
+    LABEL_STACK,
+    ComponentRecord,
+    to_metadata_block,
+)
+
+SUBSCRIBE_TRIGGERS = ("on-deployed", "on-health-degraded", "on-sync-failed")
+NOTIFICATION_SERVICE = "deployground"
+DEFAULT_WEBHOOK_PATH = "/webhooks/argocd"
+FINALIZER = "resources-finalizer.argocd.argoproj.io"
+
+# annotation suffix -> key in the file's `deployground:` block
+_ANNOTATION_FIELDS = {
+    "stack": "stack",
+    "component": "component",
+    "owner": "owner",
+    "owner-email": "ownerEmail",
+    "env": "env",
+    "expires-at": "expiresAt",
+    "version": "version",
+    "thread-ts": "threadTs",
+    "channel": "channel",
+}
+
+
+def _ref(key: str) -> str:
+    """Generator placeholder for a key of the component file's `deployground:` block."""
+    return "{{" + f"{BLOCK_KEY}.{key}" + "}}"
+
+
+class ApplicationSetTarget:
+    def __init__(self, cfg: DeployTargetCfg, repo_ref: RepoRef) -> None:
+        self._cfg = cfg
+        self._repo_ref = repo_ref
+
+    def _path(self, stack: str, env: str, component: str) -> str:
+        return self._cfg.pathTemplate.format(env=env, stack=stack, component=component)
+
+    def files_for(
+        self,
+        stack: str,
+        env: str,
+        components: dict[str, ResolvedComponent],
+        records: dict[str, ComponentRecord],
+    ) -> list[FileChange]:
+        changes: list[FileChange] = []
+        for name, comp in components.items():
+            data: dict[str, Any] = {"image": f"{comp.image}:{comp.version}"}
+            if comp.port is not None:
+                data["port"] = comp.port
+            data["replicas"] = comp.replicas
+            if comp.ingressHost is not None:
+                data["ingressHost"] = comp.ingressHost
+            if comp.env:
+                data["env"] = dict(comp.env)
+            if comp.secretRefs:
+                data["secretRefs"] = list(comp.secretRefs)
+            data[BLOCK_KEY] = to_metadata_block(records[name])
+            changes.append(
+                FileChange(
+                    repo=self._repo_ref,
+                    path=self._path(stack, env, name),
+                    content=yaml.safe_dump(data, sort_keys=False),
+                )
+            )
+        return changes
+
+    def delete_files_for(
+        self, stack: str, env: str, component_names: list[str]
+    ) -> list[FileChange]:
+        return [
+            FileChange(repo=self._repo_ref, path=self._path(stack, env, name), content=None)
+            for name in component_names
+        ]
+
+    def bootstrap_manifests(self, config: Config) -> dict[str, str]:
+        return {
+            "applicationset.yaml": yaml.safe_dump(self._applicationset(), sort_keys=False),
+            "argocd-notifications-cm.yaml": yaml.safe_dump(
+                _notifications_cm(config), sort_keys=False
+            ),
+        }
+
+    def _applicationset(self) -> dict[str, Any]:
+        repo_url = f"https://github.com/{self._repo_ref.owner}/{self._repo_ref.name}.git"
+        # `{env}/{stack}/{component}/config.yaml` -> `*/*/*/config.yaml`
+        glob = re.sub(r"\{[^}]*\}", "*", self._cfg.pathTemplate)
+
+        labels = {
+            LABEL_STACK: _ref("stack"),
+            LABEL_COMPONENT: _ref("component"),
+            LABEL_MANAGED: "true",
+        }
+        annotations = {
+            f"{ANNOTATION_PREFIX}{suffix}": _ref(key) for suffix, key in _ANNOTATION_FIELDS.items()
+        }
+        for trigger in SUBSCRIBE_TRIGGERS:
+            subscribe = f"notifications.argoproj.io/subscribe.{trigger}.{NOTIFICATION_SERVICE}"
+            annotations[subscribe] = ""
+
+        return {
+            "apiVersion": "argoproj.io/v1alpha1",
+            "kind": "ApplicationSet",
+            "metadata": {"name": "deployground", "namespace": "argocd"},
+            "spec": {
+                "generators": [
+                    {
+                        "git": {
+                            "repoURL": repo_url,
+                            "revision": self._repo_ref.branch,
+                            "files": [{"path": glob}],
+                        }
+                    }
+                ],
+                "template": {
+                    "metadata": {
+                        "name": f"{_ref('stack')}-{_ref('component')}",
+                        "labels": labels,
+                        "annotations": annotations,
+                        "finalizers": [FINALIZER],
+                    },
+                    "spec": {
+                        "project": "default",
+                        "source": {
+                            "repoURL": repo_url,
+                            "targetRevision": self._repo_ref.branch,
+                            "path": "golden-path",
+                            "helm": {"valueFiles": ["../{{path.path}}/{{path.filename}}"]},
+                        },
+                        # Environment name doubles as the ArgoCD cluster name; the stack
+                        # name is the namespace. Review before applying.
+                        "destination": {"name": _ref("env"), "namespace": _ref("stack")},
+                        "syncPolicy": {
+                            "automated": {"prune": True, "selfHeal": True},
+                            "syncOptions": ["CreateNamespace=true"],
+                        },
+                    },
+                },
+            },
+        }
+
+
+_NOTIFY_BODY = (
+    '{"app": "{{.app.metadata.name}}", '
+    '"labels": {{.app.metadata.labels | toJson}}, '
+    '"health": "{{.app.status.health.status}}", '
+    '"sync": "{{.app.status.sync.status}}", '
+    '"trigger": "{{.trigger}}"}'
+)
+
+_TRIGGER_WHEN = {
+    "on-deployed": (
+        "app.status.operationState.phase in ['Succeeded'] and app.status.health.status == 'Healthy'"
+    ),
+    "on-health-degraded": "app.status.health.status == 'Degraded'",
+    "on-sync-failed": "app.status.operationState.phase in ['Error', 'Failed']",
+}
+
+
+def _notifications_cm(config: Config) -> dict[str, Any]:
+    webhook_path = config.statusSource.webhookPath or DEFAULT_WEBHOOK_PATH
+    template_name = f"{NOTIFICATION_SERVICE}-status"
+    data: dict[str, str] = {
+        f"service.webhook.{NOTIFICATION_SERVICE}": yaml.safe_dump(
+            {
+                "url": f"http://deployground.deployground.svc.cluster.local{webhook_path}",
+                "headers": [{"name": "Content-Type", "value": "application/json"}],
+            },
+            sort_keys=False,
+        ),
+        f"template.{template_name}": yaml.safe_dump(
+            {
+                "webhook": {
+                    NOTIFICATION_SERVICE: {
+                        "method": "POST",
+                        "body": _NOTIFY_BODY,
+                    }
+                }
+            },
+            sort_keys=False,
+        ),
+    }
+    for trigger, when in _TRIGGER_WHEN.items():
+        data[f"trigger.{trigger}"] = yaml.safe_dump(
+            [{"when": when, "send": [template_name]}], sort_keys=False
+        )
+    return {
+        "apiVersion": "v1",
+        "kind": "ConfigMap",
+        "metadata": {"name": "argocd-notifications-cm", "namespace": "argocd"},
+        "data": data,
+    }
