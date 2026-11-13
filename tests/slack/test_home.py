@@ -2,6 +2,7 @@ from datetime import UTC, datetime, timedelta
 
 from deployground.metadata import StackRecord
 from deployground.slack.home import build_home, humanize_expiry
+from deployground.states import StackState
 
 NOW = datetime(2026, 11, 13, 12, 0, tzinfo=UTC)
 
@@ -62,3 +63,24 @@ def test_humanize_expiry():
     assert humanize_expiry(NOW - timedelta(minutes=1), NOW) == "expired"
     assert humanize_expiry(NOW + timedelta(minutes=45), NOW) == "45m"
     assert humanize_expiry(NOW + timedelta(hours=2, minutes=30), NOW) == "2h 30m"
+
+
+def test_home_renders_provided_status():
+    view = build_home(
+        "U1",
+        FakeIndex([_rec("shop")]),
+        FakeAuthz({"dev"}),
+        statuses={"shop": StackState.Failed},
+        now=NOW,
+    )
+    assert "Failed" in str(view)
+    assert "Running" not in str(view)
+
+
+def test_home_status_falls_back_to_unknown():
+    for statuses in (None, {}):
+        view = build_home(
+            "U1", FakeIndex([_rec("shop")]), FakeAuthz({"dev"}), statuses=statuses, now=NOW
+        )
+        assert "Status: unknown" in str(view)
+        assert "unning" not in str(view)

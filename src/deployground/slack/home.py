@@ -11,6 +11,8 @@ from typing import Any
 
 from deployground.authz.base import AuthzProvider
 from deployground.index import StackIndex
+from deployground.slack.progress import OVERALL_EMOJI
+from deployground.states import StackState
 
 View = dict[str, Any]
 Block = dict[str, Any]
@@ -18,11 +20,18 @@ Block = dict[str, Any]
 OPEN_DEPLOY_FORM = "open_deploy_form"
 EXTEND_PREFIX = "extend::"
 DESTROY_PREFIX = "destroy::"
-STATUS_PLACEHOLDER = "running"
+STATUS_UNKNOWN = "unknown"
 
 
 def _text(text: str, kind: str = "plain_text") -> dict[str, Any]:
     return {"type": kind, "text": text}
+
+
+def _status_label(stack: str, statuses: dict[str, StackState] | None) -> str:
+    state = (statuses or {}).get(stack)
+    if state is None:
+        return STATUS_UNKNOWN
+    return f"{OVERALL_EMOJI[state]} {state.value.capitalize()}"
 
 
 def humanize_expiry(expires_at: datetime | None, now: datetime) -> str:
@@ -47,7 +56,12 @@ def _button(label: str, action_id: str, value: str | None = None, **extra: Any) 
 
 
 def build_home(
-    user: str, index: StackIndex, authz: AuthzProvider, now: datetime | None = None
+    user: str,
+    index: StackIndex,
+    authz: AuthzProvider,
+    *,
+    statuses: dict[str, StackState] | None = None,
+    now: datetime | None = None,
 ) -> View:
     now = now or datetime.now(UTC)
     blocks: list[Block] = []
@@ -69,7 +83,7 @@ def build_home(
                 "type": "section",
                 "text": _text(
                     f"*{rec.name}* ({rec.env})\n"
-                    f"Status: {STATUS_PLACEHOLDER} | Expires in: {expiry}",
+                    f"Status: {_status_label(rec.name, statuses)} | Expires in: {expiry}",
                     "mrkdwn",
                 ),
             }
