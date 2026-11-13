@@ -3,8 +3,11 @@
 Block keys are camelCase (`ownerEmail`, `expiresAt`, `threadTs`); the Python record
 fields are snake_case. `expiresAt` is always present in the block: an RFC3339 UTC
 timestamp (e.g. `2026-11-13T09:00:00Z`), or `null` when the stack never expires
-(`ttl: none`). Parsing rejects a block with missing, extra or non-string fields,
-raising `InvalidMetadata` (a `ValueError`) so callers can skip bad files.
+(`ttl: none`). Parsing rejects a block with missing or wrongly typed fields, raising
+`InvalidMetadata` (a `ValueError`) so callers can skip bad files. Unknown keys inside
+the block are ignored, so newer writers stay readable by older orchestrators.
+An unquoted YAML timestamp (already a datetime after `safe_load`) is accepted as
+`expiresAt` as long as it is timezone-aware.
 
 Annotations use the same fields with kebab-case keys under `deployground.io/`.
 All annotation values are strings; a missing expiry is the string `"none"`.
@@ -75,13 +78,17 @@ def _format_expiry(expires_at: datetime | None) -> str | None:
     return expires_at.astimezone(UTC).isoformat().replace("+00:00", "Z")
 
 
-def _parse_expiry(text: str) -> datetime:
-    try:
-        parsed = datetime.fromisoformat(text)
-    except ValueError as exc:
-        raise InvalidMetadata(f"expiresAt is not an RFC3339 timestamp: {text!r}") from exc
+def _parse_expiry(value: str | datetime) -> datetime:
+    """Accept an RFC3339 string or an aware datetime (PyYAML resolves unquoted timestamps)."""
+    if isinstance(value, datetime):
+        parsed = value
+    else:
+        try:
+            parsed = datetime.fromisoformat(value)
+        except ValueError as exc:
+            raise InvalidMetadata(f"expiresAt is not an RFC3339 timestamp: {value!r}") from exc
     if parsed.tzinfo is None:
-        raise InvalidMetadata(f"expiresAt must include a timezone: {text!r}")
+        raise InvalidMetadata(f"expiresAt must include a timezone: {value!r}")
     return parsed
 
 
@@ -108,22 +115,19 @@ def parse_metadata_block(file_dict: Any) -> ComponentRecord:
     if not isinstance(block, dict):
         raise InvalidMetadata(f"{BLOCK_KEY!r} block must be a mapping")
 
+    # Unknown keys are ignored so that newer writers stay readable by older orchestrators.
     missing = sorted(_BLOCK_KEYS - block.keys())
     if missing:
         raise InvalidMetadata(f"{BLOCK_KEY!r} block is missing keys: {', '.join(missing)}")
-    unknown = [key for key in block if key not in _BLOCK_KEYS]
-    if unknown:
-        raise InvalidMetadata(f"{BLOCK_KEY!r} block has unknown keys: {', '.join(unknown)}")
 
-    for key, value in block.items():
-        if key == "expiresAt":
-            if value is not None and not isinstance(value, str):
-                raise InvalidMetadata("expiresAt must be a string or null")
-        elif not isinstance(value, str):
+    for key in _BLOCK_KEYS - {"expiresAt"}:
+        if not isinstance(block[key], str):
             raise InvalidMetadata(f"{key} must be a string")
 
-    expires_text = block["expiresAt"]
-    expires_at = None if expires_text is None else _parse_expiry(expires_text)
+    expires_value = block["expiresAt"]
+    if expires_value is not None and not isinstance(expires_value, str | datetime):
+        raise InvalidMetadata("expiresAt must be a string, a timestamp or null")
+    expires_at = None if expires_value is None else _parse_expiry(expires_value)
 
     return ComponentRecord(
         stack=block["stack"],

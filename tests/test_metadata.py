@@ -77,3 +77,21 @@ def test_parse_rejects_missing_or_malformed_block(bad):
 
 def test_invalid_metadata_is_value_error():
     assert issubclass(InvalidMetadata, ValueError)
+
+
+def test_block_ignores_unknown_keys():
+    record = _record()
+    block = to_metadata_block(record) | {"futureField": "later-version"}
+    assert parse_metadata_block({"deployground": block}) == record
+
+
+def test_expires_at_accepts_unquoted_yaml_timestamp():
+    # PyYAML safe_load turns an unquoted `2026-11-13T09:00:00Z` into an aware datetime.
+    block = to_metadata_block(_record()) | {"expiresAt": datetime(2026, 11, 13, 9, 0, tzinfo=UTC)}
+    assert parse_metadata_block({"deployground": block}) == _record()
+
+
+def test_expires_at_rejects_naive_datetime():
+    block = to_metadata_block(_record()) | {"expiresAt": datetime(2026, 11, 13, 9, 0)}
+    with pytest.raises(InvalidMetadata):
+        parse_metadata_block({"deployground": block})
