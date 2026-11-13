@@ -74,6 +74,12 @@ class LifecycleService:
         if env not in self._environments or env not in self._authz.allowed_environments(user):
             raise Denied(f"You are not allowed to deploy to {env!r}.")
         env_cfg = self._environments[env]
+        existing = self._index.get(stack)
+        if existing is not None:
+            if existing.env != env:
+                raise Denied(f"Stack {stack!r} already exists in {existing.env!r}.")
+            if not self._authz.can_manage(user, existing.owner):
+                raise Denied(f"Stack {stack!r} already exists and is owned by someone else.")
         limit = self._lifecycle_cfg.maxLivePerUser
         if self._index.count_live_for(user) >= limit:
             raise Denied(f"You already have {limit} live stacks (the maximum). Destroy one first.")

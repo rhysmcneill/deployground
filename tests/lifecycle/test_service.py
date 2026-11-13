@@ -200,3 +200,31 @@ def test_extend_without_expiry_denied():
     with pytest.raises(Denied, match="no expiry"):
         svc.extend("U1", "demo", "1h")
     assert git.prs == []
+
+
+def _existing(env="dev", owner="U1"):
+    return StackRecord("demo", env, owner, NOW, "1.1", "C1")
+
+
+def test_deploy_over_existing_stack_of_other_owner_denied():
+    svc, git, _, index = make_service(authz=FakeAuthz(manage=False))
+    index.records["demo"] = _existing()
+    with pytest.raises(Denied, match="owned by someone else"):
+        deploy(svc, user="U2")
+    assert git.prs == []
+    assert index.records["demo"].owner == "U1"
+
+
+def test_owner_redeploy_same_env_allowed():
+    svc, git, _, index = make_service()
+    index.records["demo"] = _existing()
+    deploy(svc, user="U1")
+    assert len(git.prs) == 1
+
+
+def test_deploy_same_stack_different_env_denied():
+    svc, git, _, index = make_service()
+    index.records["demo"] = _existing(env="dev")
+    with pytest.raises(Denied, match="already exists"):
+        deploy(svc, user="U1", env="prod")
+    assert git.prs == []
