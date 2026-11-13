@@ -12,6 +12,7 @@ import yaml
 
 from deployground.catalog import ResolvedComponent
 from deployground.config.models import Config, DeployTargetCfg, RepoRef
+from deployground.deploytarget.notifications import notifications_cm, subscribe_annotations
 from deployground.git.base import FileChange
 from deployground.metadata import (
     ANNOTATION_PREFIX,
@@ -23,9 +24,6 @@ from deployground.metadata import (
     to_metadata_block,
 )
 
-SUBSCRIBE_TRIGGERS = ("on-deployed", "on-health-degraded", "on-sync-failed")
-NOTIFICATION_SERVICE = "deployground"
-DEFAULT_WEBHOOK_PATH = "/webhooks/argocd"
 FINALIZER = "resources-finalizer.argocd.argoproj.io"
 
 # annotation suffix -> key in the file's `deployground:` block
@@ -102,7 +100,7 @@ class ApplicationSetTarget:
             for env_name, env in config.environments.items()
         }
         manifests["argocd-notifications-cm.yaml"] = yaml.safe_dump(
-            _notifications_cm(config), sort_keys=False
+            notifications_cm(config), sort_keys=False
         )
         return manifests
 
@@ -119,9 +117,7 @@ class ApplicationSetTarget:
         annotations = {
             f"{ANNOTATION_PREFIX}{suffix}": _ref(key) for suffix, key in _ANNOTATION_FIELDS.items()
         }
-        for trigger in SUBSCRIBE_TRIGGERS:
-            subscribe = f"notifications.argoproj.io/subscribe.{trigger}.{NOTIFICATION_SERVICE}"
-            annotations[subscribe] = ""
+        annotations.update(subscribe_annotations())
 
         return {
             "apiVersion": "argoproj.io/v1alpha1",
@@ -162,56 +158,3 @@ class ApplicationSetTarget:
                 },
             },
         }
-
-
-_NOTIFY_BODY = (
-    '{"app": "{{.app.metadata.name}}", '
-    '"labels": {{.app.metadata.labels | toJson}}, '
-    '"health": "{{.app.status.health.status}}", '
-    '"sync": "{{.app.status.sync.status}}", '
-    '"trigger": "{{.trigger}}"}'
-)
-
-_TRIGGER_WHEN = {
-    "on-deployed": (
-        "app.status.operationState.phase in ['Succeeded'] and app.status.health.status == 'Healthy'"
-    ),
-    "on-health-degraded": "app.status.health.status == 'Degraded'",
-    "on-sync-failed": "app.status.operationState.phase in ['Error', 'Failed']",
-}
-
-
-def _notifications_cm(config: Config) -> dict[str, Any]:
-    webhook_path = config.statusSource.webhookPath or DEFAULT_WEBHOOK_PATH
-    template_name = f"{NOTIFICATION_SERVICE}-status"
-    data: dict[str, str] = {
-        f"service.webhook.{NOTIFICATION_SERVICE}": yaml.safe_dump(
-            {
-                # Placeholder host: adjust to wherever the bot's webhook is reachable.
-                "url": f"http://deployground.deployground.svc.cluster.local{webhook_path}",
-                "headers": [{"name": "Content-Type", "value": "application/json"}],
-            },
-            sort_keys=False,
-        ),
-        f"template.{template_name}": yaml.safe_dump(
-            {
-                "webhook": {
-                    NOTIFICATION_SERVICE: {
-                        "method": "POST",
-                        "body": _NOTIFY_BODY,
-                    }
-                }
-            },
-            sort_keys=False,
-        ),
-    }
-    for trigger, when in _TRIGGER_WHEN.items():
-        data[f"trigger.{trigger}"] = yaml.safe_dump(
-            [{"when": when, "send": [template_name]}], sort_keys=False
-        )
-    return {
-        "apiVersion": "v1",
-        "kind": "ConfigMap",
-        "metadata": {"name": "argocd-notifications-cm", "namespace": "argocd"},
-        "data": data,
-    }

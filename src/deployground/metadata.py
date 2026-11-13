@@ -111,7 +111,10 @@ def parse_metadata_block(file_dict: Any) -> ComponentRecord:
     """Parse the `deployground:` block out of a whole component file's parsed YAML dict."""
     if not isinstance(file_dict, dict) or BLOCK_KEY not in file_dict:
         raise InvalidMetadata(f"missing {BLOCK_KEY!r} block")
-    block = file_dict[BLOCK_KEY]
+    return _record_from_block(file_dict[BLOCK_KEY])
+
+
+def _record_from_block(block: Any) -> ComponentRecord:
     if not isinstance(block, dict):
         raise InvalidMetadata(f"{BLOCK_KEY!r} block must be a mapping")
 
@@ -156,3 +159,47 @@ def to_annotations(record: ComponentRecord) -> dict[str, str]:
         f"{ANNOTATION_PREFIX}thread-ts": record.thread_ts,
         f"{ANNOTATION_PREFIX}channel": record.channel,
     }
+
+
+# annotation suffix -> `deployground:` block key
+_ANNOTATION_TO_BLOCK = {
+    "stack": "stack",
+    "component": "component",
+    "owner": "owner",
+    "owner-email": "ownerEmail",
+    "env": "env",
+    "expires-at": "expiresAt",
+    "version": "version",
+    "thread-ts": "threadTs",
+    "channel": "channel",
+}
+
+
+def from_annotations(annotations: Any) -> ComponentRecord:
+    """Inverse of `to_annotations`; raises `InvalidMetadata` on missing or malformed values."""
+    if not isinstance(annotations, dict):
+        raise InvalidMetadata("annotations must be a mapping")
+    block: dict[str, Any] = {}
+    for suffix, key in _ANNOTATION_TO_BLOCK.items():
+        value = annotations.get(f"{ANNOTATION_PREFIX}{suffix}")
+        if value is not None:
+            block[key] = value
+    if block.get("expiresAt") == NO_EXPIRY:
+        block["expiresAt"] = None
+    return _record_from_block(block)
+
+
+def parse_component_file(file_dict: Any) -> ComponentRecord:
+    """Parse a committed component file of either shape.
+
+    Tries the `deployground:` block first (ApplicationSet target); otherwise an Argo
+    `Application` manifest whose `metadata.annotations` carry the `deployground.io/*` keys.
+    """
+    if isinstance(file_dict, dict) and BLOCK_KEY in file_dict:
+        return parse_metadata_block(file_dict)
+    if isinstance(file_dict, dict) and file_dict.get("kind") == "Application":
+        metadata = file_dict.get("metadata")
+        if not isinstance(metadata, dict):
+            raise InvalidMetadata("Application manifest has no metadata mapping")
+        return from_annotations(metadata.get("annotations"))
+    raise InvalidMetadata(f"missing {BLOCK_KEY!r} block")

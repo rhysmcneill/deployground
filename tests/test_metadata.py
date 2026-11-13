@@ -8,6 +8,8 @@ from deployground.metadata import (
     LABEL_STACK,
     ComponentRecord,
     InvalidMetadata,
+    from_annotations,
+    parse_component_file,
     parse_metadata_block,
     to_annotations,
     to_metadata_block,
@@ -95,3 +97,37 @@ def test_expires_at_rejects_naive_datetime():
     block = to_metadata_block(_record()) | {"expiresAt": datetime(2026, 11, 13, 9, 0)}
     with pytest.raises(InvalidMetadata):
         parse_metadata_block({"deployground": block})
+
+
+def test_annotations_roundtrip_component_record():
+    for record in (_record(), _record(expires_at=None)):
+        assert from_annotations(to_annotations(record)) == record
+
+
+@pytest.mark.parametrize(
+    "mutate",
+    [
+        lambda a: a.pop("deployground.io/owner"),
+        lambda a: a.update({"deployground.io/expires-at": "not-a-date"}),
+        lambda a: a.update({"deployground.io/expires-at": "2026-11-13T09:00:00"}),
+    ],
+)
+def test_from_annotations_rejects_bad_input(mutate):
+    annotations = to_annotations(_record())
+    mutate(annotations)
+    with pytest.raises(InvalidMetadata):
+        from_annotations(annotations)
+
+
+def test_parse_component_file_accepts_both_shapes():
+    record = _record()
+    app = {
+        "apiVersion": "argoproj.io/v1alpha1",
+        "kind": "Application",
+        "metadata": {"name": "x", "annotations": to_annotations(record)},
+    }
+    assert parse_component_file(app) == record
+    assert parse_component_file({"deployground": to_metadata_block(record)}) == record
+    for bad in (None, [], {"kind": "Application"}, {"kind": "Application", "metadata": []}):
+        with pytest.raises(InvalidMetadata):
+            parse_component_file(bad)

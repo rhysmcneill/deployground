@@ -6,7 +6,7 @@ import yaml
 
 from deployground.config.models import DeployTargetCfg, RepoRef, TokenRef
 from deployground.index import StackIndex
-from deployground.metadata import ComponentRecord, StackRecord, to_metadata_block
+from deployground.metadata import ComponentRecord, StackRecord, to_annotations, to_metadata_block
 
 REPO = RepoRef(owner="acme", name="deploys", branch="main", authRef=TokenRef(tokenEnv="TOK"))
 CFG = DeployTargetCfg(
@@ -131,3 +131,18 @@ def test_rebuild_skips_malformed_file_and_logs(bad, caplog):
         index, _ = make_index(comp("good", "api"), extra=[bad])
     assert [s.name for s in index.list_live()] == ["good"]
     assert bad[0] in caplog.text
+
+
+def test_rebuild_parses_application_manifest_annotations():
+    rec = comp("s3", "api")
+    app = {
+        "apiVersion": "argoproj.io/v1alpha1",
+        "kind": "Application",
+        "metadata": {"name": "s3-api", "annotations": to_annotations(rec)},
+        "spec": {},
+    }
+    index, _ = make_index(comp("s1", "web"), extra=[("stacks/s3/api.yaml", yaml.safe_dump(app))])
+    s3 = index.get("s3")
+    assert s3 is not None
+    assert s3.components["api"] == rec
+    assert index.get("s1") is not None

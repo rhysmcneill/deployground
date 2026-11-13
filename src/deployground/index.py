@@ -13,7 +13,7 @@ import yaml
 
 from deployground.config.models import DeployTargetCfg, RepoRef
 from deployground.git.base import GitClient
-from deployground.metadata import InvalidMetadata, StackRecord, parse_metadata_block
+from deployground.metadata import InvalidMetadata, StackRecord, parse_component_file
 
 logger = logging.getLogger(__name__)
 
@@ -37,7 +37,7 @@ class StackIndex:
         stacks: dict[str, StackRecord] = {}
         for path, content in files:
             try:
-                record = parse_metadata_block(yaml.safe_load(content))
+                record = parse_component_file(yaml.safe_load(content))
             except (yaml.YAMLError, InvalidMetadata) as exc:
                 logger.warning("skipping %s: %s", path, exc)
                 continue
