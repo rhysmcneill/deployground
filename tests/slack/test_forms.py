@@ -141,3 +141,16 @@ def test_parse_submission_returns_inline_errors_for_bad_input():
     assert set(errors) == {"stack", "env", "ttl", "override::web"}
     _, errors = parse_submission(state(ttl=""))
     assert set(errors) == {"ttl"}
+
+
+def test_empty_envs_view_has_no_inputs_and_no_submit():
+    view = build_deploy_modal("U1", catalog(), FakeAuthz(set()))
+    assert not [b for b in view["blocks"] if b["type"] == "input"]
+    assert "submit" not in view
+
+
+def test_stack_and_override_picker_dispatch_actions():
+    prefill = DeployInputs("shop", "dev", {"web": "v9"}, "2h")
+    view = build_deploy_modal("U1", catalog(), FakeAuthz({"dev"}), prefill)
+    assert block(view, "stack")["dispatch_action"] is True
+    assert block(view, "override_components")["dispatch_action"] is True

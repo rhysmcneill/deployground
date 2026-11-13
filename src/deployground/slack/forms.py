@@ -7,8 +7,10 @@ Conventions Task 17 depends on:
   so state is read as ``view["state"]["values"][block_id]["val"]``.
 - Block ids: "stack", "env", "ttl", "override_components" (multi-select of components),
   and "override::<component>" (one text input per overridden component).
-- The "stack" block has ``dispatch_action`` set, so choosing a stack emits a block_actions
-  event; the handler then calls views.update with ``build_override_blocks`` output.
+- The "stack" and "override_components" blocks have ``dispatch_action`` set, so choosing a
+  stack or picking components emits block_actions; the handler then calls views.update with
+  ``build_override_blocks`` output (preserve existing override values when re-rendering).
+- With no allowed environments the modal is a notice only (no input blocks, no submit).
 - Modal callback_id is "deploy_submit".
 """
 
@@ -88,6 +90,24 @@ def build_deploy_modal(
 ) -> View:
     stacks = catalog.list_stacks()
     envs = sorted(authz.allowed_environments(user))
+    if not envs:
+        # Notice-only view: no input blocks, so Slack requires no submit button.
+        return {
+            "type": "modal",
+            "callback_id": CALLBACK_ID,
+            "title": _text("Deploy"),
+            "close": _text("Close"),
+            "blocks": [
+                {
+                    "type": "section",
+                    "block_id": "no_envs",
+                    "text": {
+                        "type": "mrkdwn",
+                        "text": "You are not allowed to deploy to any environment.",
+                    },
+                }
+            ],
+        }
 
     if len(stacks) <= STATIC_SELECT_LIMIT:
         stack_element: dict[str, Any] = {
@@ -108,26 +128,14 @@ def build_deploy_modal(
 
     blocks: list[Block] = [_input("stack", "Stack", stack_element, dispatch_action=True)]
 
-    if envs:
-        env_element: dict[str, Any] = {
-            "type": "static_select",
-            "placeholder": _text("Select an environment"),
-            "options": [_option(e) for e in envs],
-        }
-        if prefill is not None and prefill.env in envs:
-            env_element["initial_option"] = _option(prefill.env)
-        blocks.append(_input("env", "Environment", env_element))
-    else:
-        blocks.append(
-            {
-                "type": "section",
-                "block_id": "no_envs",
-                "text": {
-                    "type": "mrkdwn",
-                    "text": "You are not allowed to deploy to any environment.",
-                },
-            }
-        )
+    env_element: dict[str, Any] = {
+        "type": "static_select",
+        "placeholder": _text("Select an environment"),
+        "options": [_option(e) for e in envs],
+    }
+    if prefill is not None and prefill.env in envs:
+        env_element["initial_option"] = _option(prefill.env)
+    blocks.append(_input("env", "Environment", env_element))
 
     ttl = prefill.ttl if prefill is not None else DEFAULT_TTL
     blocks.append(
@@ -151,7 +159,15 @@ def build_deploy_modal(
         chosen = [c for c in sorted(prefill.overrides) if c in stack_def.components]
         if chosen:
             picker["initial_options"] = [_option(c) for c in chosen]
-        blocks.append(_input(OVERRIDE_PICKER_BLOCK, "Override components", picker, optional=True))
+        blocks.append(
+            _input(
+                OVERRIDE_PICKER_BLOCK,
+                "Override components",
+                picker,
+                optional=True,
+                dispatch_action=True,
+            )
+        )
         blocks.extend(build_override_blocks(stack_def, chosen, prefill.overrides))
 
     view: View = {
@@ -159,10 +175,9 @@ def build_deploy_modal(
         "callback_id": CALLBACK_ID,
         "title": _text("Deploy"),
         "close": _text("Cancel"),
+        "submit": _text("Deploy"),
         "blocks": blocks,
     }
-    if envs:
-        view["submit"] = _text("Deploy")
     return view
 
 
