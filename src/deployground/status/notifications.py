@@ -4,13 +4,15 @@ Raw ASGI (no Starlette) keeps dependencies lean. Task 19 mounts/serves ``asgi_ap
 ``start``/``stop`` here only manage the callback, never a server.
 """
 
+import hmac
 import json
 import logging
+import os
 from collections.abc import Awaitable, Callable, MutableMapping
 from typing import Any
 
 from deployground.config.models import StatusSourceCfg
-from deployground.deploytarget.notifications import DEFAULT_WEBHOOK_PATH
+from deployground.deploytarget.notifications import DEFAULT_WEBHOOK_PATH, WEBHOOK_TOKEN_HEADER
 from deployground.metadata import LABEL_COMPONENT, LABEL_STACK
 from deployground.states import CompState
 from deployground.status.base import StatusEvent
@@ -49,7 +51,10 @@ class NotificationsSource:
 
     def __init__(self, cfg: StatusSourceCfg) -> None:
         self._path = cfg.webhookPath or DEFAULT_WEBHOOK_PATH
+        self._token_env = cfg.secretRef.tokenEnv if cfg.secretRef else None
         self._on_change: Callable[[StatusEvent], None] | None = None
+        if self._token_env is None:
+            log.warning("notifications webhook is unauthenticated (statusSource.secretRef unset)")
 
     def start(self, on_change: Callable[[StatusEvent], None]) -> None:
         self._on_change = on_change
@@ -66,6 +71,9 @@ class NotificationsSource:
         if scope["method"] != "POST":
             await self._respond(send, 405)
             return
+        if not self._authorized(scope):
+            await self._respond(send, 401)
+            return
         body = b""
         while True:
             message = await receive()
@@ -77,6 +85,18 @@ class NotificationsSource:
             self._on_change(event)
         # Always 204 for accepted deliveries so Argo does not retry ignorable payloads.
         await self._respond(send, 204)
+
+    def _authorized(self, scope: Scope) -> bool:
+        if self._token_env is None:
+            return True
+        expected = os.environ.get(self._token_env, "")
+        if not expected:
+            return False  # fail closed when the configured secret is not set
+        wanted = WEBHOOK_TOKEN_HEADER.lower().encode()
+        for name, value in scope.get("headers", []):
+            if name.lower() == wanted:
+                return hmac.compare_digest(value, expected.encode())
+        return False
 
     @staticmethod
     def _parse(body: bytes) -> StatusEvent | None:

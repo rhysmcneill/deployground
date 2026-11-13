@@ -156,9 +156,14 @@ def test_bootstrap_applicationset_templates_labels_annotations_and_subscription(
     cm = yaml.safe_load(manifests["argocd-notifications-cm.yaml"])
     assert cm["kind"] == "ConfigMap"
     assert "/hooks/argocd" in cm["data"]["service.webhook.deployground"]
-    assert "template.deployground-status" in cm["data"]
     for trigger in TRIGGERS:
-        assert f"trigger.{trigger}" in cm["data"]
+        sends = yaml.safe_load(cm["data"][f"trigger.{trigger}"])[0]["send"]
+        assert len(sends) == 1
+        tmpl_yaml = yaml.safe_load(cm["data"][f"template.{sends[0]}"])
+        body = tmpl_yaml["webhook"]["deployground"]["body"]
+        assert f'"trigger": "{trigger}"' in body
+    assert not any("{{.trigger}}" in v for v in cm["data"].values())
+    assert "X-Deployground-Token" not in cm["data"]["service.webhook.deployground"]
 
 
 def test_bootstrap_one_applicationset_per_env_with_its_cluster():

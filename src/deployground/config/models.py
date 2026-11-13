@@ -113,6 +113,8 @@ class StatusSourceCfg(_Model):
     url: str | None = None
     tokenRef: TokenRef | None = None
     pollInterval: Duration | None = None
+    # Env var holding the shared secret the notifications webhook must present.
+    secretRef: TokenRef | None = None
 
 
 class Lifecycle(_Model):

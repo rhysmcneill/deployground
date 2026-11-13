@@ -13,7 +13,7 @@ from deployground.status.notifications import NotificationsSource
 LABELS = {"deployground.io/stack": "s1", "deployground.io/component": "web"}
 
 
-def _post(app, path: str, body: bytes, method: str = "POST") -> int:
+def _post(app, path: str, body: bytes, method: str = "POST", headers=None) -> int:
     """Drive the raw ASGI app directly and return the response status."""
     sent: list[dict] = []
 
@@ -23,7 +23,7 @@ def _post(app, path: str, body: bytes, method: str = "POST") -> int:
     async def send(message):
         sent.append(message)
 
-    scope = {"type": "http", "method": method, "path": path, "headers": []}
+    scope = {"type": "http", "method": method, "path": path, "headers": headers or []}
     asyncio.run(app(scope, receive, send))
     return next(m["status"] for m in sent if m["type"] == "http.response.start")
 
@@ -123,3 +123,37 @@ def test_factory_selects_by_type():
     assert isinstance(a, ArgoApiSource)
     with pytest.raises(ValueError):
         make_status_source(StatusSourceCfg.model_construct(type="bogus"))
+
+
+def _secured(monkeypatch):
+    monkeypatch.setenv("HOOK_TOKEN", "s3cret")
+    cfg = StatusSourceCfg(
+        type="argocd-notifications",
+        webhookPath="/w",
+        secretRef={"tokenEnv": "HOOK_TOKEN"},
+    )
+    events: list[StatusEvent] = []
+    src = NotificationsSource(cfg)
+    src.start(events.append)
+    return src, events
+
+
+def test_notifications_secret_required_when_configured(monkeypatch):
+    src, events = _secured(monkeypatch)
+
+    def hdr(v):
+        return [(b"x-deployground-token", v)]
+
+    assert _post(src.asgi_app, "/w", _payload(LABELS)) == 401
+    assert _post(src.asgi_app, "/w", _payload(LABELS), headers=hdr(b"wrong")) == 401
+    assert events == []
+    assert _post(src.asgi_app, "/w", _payload(LABELS), headers=hdr(b"s3cret")) == 204
+    assert len(events) == 1
+
+
+def test_notifications_unauthenticated_warns_once(caplog):
+    with caplog.at_level("WARNING"):
+        src, events = _notif_source()
+    assert sum("unauthenticated" in r.message for r in caplog.records) == 1
+    assert _post(src.asgi_app, "/webhooks/argocd", _payload(LABELS)) == 204
+    assert len(events) == 1
