@@ -7,13 +7,16 @@ from pydantic import ValidationError
 from deployground.config.models import Config, parse_duration
 
 VALID = {
-    "repos": {
-        "gitops": {
-            "owner": "my-org",
-            "name": "gitops",
-            "branch": "main",
-            "authRef": {"tokenEnv": "GITHUB_TOKEN"},
-        }
+    "git": {
+        "provider": "github",
+        "repos": {
+            "gitops": {
+                "owner": "my-org",
+                "name": "gitops",
+                "branch": "main",
+                "authRef": {"tokenEnv": "GITHUB_TOKEN"},
+            }
+        },
     },
     "environments": {
         "homelab": {
@@ -76,6 +79,13 @@ def test_env_referencing_unknown_repo_fails():
     cfg = Config.model_validate(data)
     with pytest.raises(ValueError, match="missing-repo"):
         cfg.validate_refs()
+
+
+def test_unsupported_git_provider_rejected():
+    data = make()
+    data["git"]["provider"] = "gitlab"
+    with pytest.raises(ValidationError):
+        Config.model_validate(data)
 
 
 def test_deploy_target_unknown_repo_fails():

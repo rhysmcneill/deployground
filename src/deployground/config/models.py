@@ -121,8 +121,13 @@ class Lifecycle(_Model):
     maxLivePerUser: int = 10
 
 
-class Config(_Model):
+class GitCfg(_Model):
+    provider: Literal["github"]
     repos: dict[str, RepoRef]
+
+
+class Config(_Model):
+    git: GitCfg
     environments: dict[str, Environment]
     stacks: dict[str, StackDef]
     capabilities: dict[str, CapabilityCfg] = Field(default_factory=dict)
@@ -136,10 +141,10 @@ class Config(_Model):
         errors: list[str] = []
 
         for env_name, env in self.environments.items():
-            if env.repo not in self.repos:
+            if env.repo not in self.git.repos:
                 errors.append(f"environment {env_name!r} references unknown repo {env.repo!r}")
 
-        if self.deployTarget.repo not in self.repos:
+        if self.deployTarget.repo not in self.git.repos:
             errors.append(f"deployTarget references unknown repo {self.deployTarget.repo!r}")
 
         allowed = [
