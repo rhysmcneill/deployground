@@ -46,6 +46,8 @@ DESTROY_NOW_PREFIX = "destroy_now::"
 CONFIRM_DESTROY_PREFIX = "confirm_destroy::"
 CANCEL_DESTROY_PREFIX = "cancel_destroy::"
 PREFILL_ACTION = "deploy_prefill"
+# Unexpected errors can carry repo URLs/paths; Slack gets this, the logs get the detail.
+GENERIC_ERROR = "an unexpected error occurred; check the bot logs"
 
 
 @dataclass
@@ -222,9 +224,9 @@ def handle_submit(deps: Deps, ack: Callable, body: dict[str, Any], client: Any) 
         fail(str(exc))
         client.chat_postEphemeral(channel=channel, user=user, text=f"Deploy refused: {exc}")
         return
-    except Exception as exc:
+    except Exception:
         logger.exception("deploy failed for %s", inputs.stack)
-        fail(f"{type(exc).__name__}: {exc}")
+        fail(GENERIC_ERROR)
         return
 
     env_cfg = deps.environments.get(inputs.env)
@@ -259,9 +261,9 @@ def handle_extend(deps: Deps, ack: Callable, body: dict[str, Any], client: Any) 
     except Denied as exc:
         _notify(client, body, str(exc))
         return
-    except Exception as exc:
+    except Exception:
         logger.exception("extend failed for %s", stack)
-        _notify(client, body, f"Extend failed: {exc}")
+        _notify(client, body, f"Extend failed: {GENERIC_ERROR}")
         return
     deps.reaper_ack(stack)
     _notify(client, body, f"Extended {stack} by {EXTEND_BY}.")
@@ -322,14 +324,20 @@ def handle_confirm_destroy(
     ack()
     stack, user = _stack_from_action(body), _user(body)
     respond(delete_original=True)
+    # Authorize BEFORE destroy: the lifecycle wrapper repaints the thread to Destroying before
+    # its own can_manage gate, so a non-owner must be stopped here to avoid that flicker.
+    record = deps.index.get(stack)
+    if record is not None and not deps.authz.can_manage(user, record.owner):
+        _notify(client, body, f"You are not allowed to manage stack {stack!r}.")
+        return
     try:
         deps.lifecycle.destroy(user, stack)
     except Denied as exc:
         _notify(client, body, str(exc))
         return
-    except Exception as exc:
+    except Exception:
         logger.exception("destroy failed for %s", stack)
-        _notify(client, body, f"Destroy failed: {exc}")
+        _notify(client, body, f"Destroy failed: {GENERIC_ERROR}")
         return
     _notify(client, body, f"Destroying {stack}.")
     _refresh_home(deps, client, user)

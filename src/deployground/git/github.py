@@ -86,6 +86,15 @@ class GitHubClient:
     def list_files(self, repo: RepoRef, path_prefix: str) -> list[tuple[str, str]]:
         api = self._api(repo)
         tree = api.git.get_tree(tree_sha=repo.branch, recursive="1")
+        truncated = (
+            tree.get("truncated") if isinstance(tree, dict) else getattr(tree, "truncated", False)
+        )
+        if truncated:
+            # A partial listing would silently drop live stacks from the index (and the reaper).
+            raise RuntimeError(
+                f"git tree listing truncated for {repo.owner}/{repo.name} under "
+                f"{path_prefix!r}: too many files to list in one request"
+            )
         result: list[tuple[str, str]] = []
         for entry in tree.tree:
             if entry.type != "blob" or not entry.path.startswith(path_prefix):

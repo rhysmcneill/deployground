@@ -83,3 +83,30 @@ def test_slack_auth_failure_is_startup_error():
             status_source=ScriptedSource(),
             app_factory=boom,
         )
+
+
+def test_failed_destroy_without_prior_status_does_not_repaint_running():
+    from types import SimpleNamespace
+
+    from deployground.app import _ForgetOnDestroy
+
+    shown = []
+
+    class Lifecycle:
+        def destroy(self, user, stack):
+            raise RuntimeError("pr failed")
+
+    class Bridge:
+        def statuses(self):
+            return {}
+
+        def forget(self, stack):
+            raise AssertionError("must not forget on failure")
+
+    record = SimpleNamespace(name="s")
+    index = SimpleNamespace(get=lambda stack: record)
+    wrapper = _ForgetOnDestroy(Lifecycle(), index, object(), Bridge())
+    wrapper._show = lambda rec, state: shown.append(state)
+    with pytest.raises(RuntimeError):
+        wrapper.destroy("U1", "s")
+    assert [s.name for s in shown] == ["Destroying"]  # no Running (or any) restore

@@ -45,4 +45,5 @@ def test_reaper_drives_notifier_warn_and_alert():
     record.expires_at = now - timedelta(minutes=1)
     reaper.tick()  # destroy fails -> alert
     assert [p["channel"] for p in client.posts] == ["C1", "DU1"]
-    assert "nope" in client.posts[0]["text"]
+    assert "nope" not in client.posts[0]["text"]
+    assert "bot logs" in client.posts[0]["text"]

@@ -80,13 +80,13 @@ class _ForgetOnDestroy:
 
     def destroy(self, user: str, stack: str) -> None:
         record = self._index.get(stack)
-        previous = self._bridge.statuses().get(stack, StackState.Running)
+        previous = self._bridge.statuses().get(stack)  # None: leave the thread alone on failure
         if record is not None:
             self._show(record, StackState.Destroying)
         try:
             self._lifecycle.destroy(user, stack)
         except Exception:
-            if record is not None:
+            if record is not None and previous is not None:
                 self._show(record, previous)
             raise
         self._bridge.forget(stack)

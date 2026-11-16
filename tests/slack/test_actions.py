@@ -93,13 +93,18 @@ def _record():
     )  # fmt: skip
 
 
+class OwnerAuthz(FakeAuthz):
+    def can_manage(self, user, stack_owner):
+        return user == stack_owner
+
+
 def make_deps(lifecycle=None, approval=False):
     cfg = Config.model_validate(CFG)
     acks = []
     deps = Deps(
         lifecycle=lifecycle or FakeLifecycle(),
         catalog=Catalog(lambda: cfg),
-        authz=FakeAuthz({"dev", "staging"}),
+        authz=OwnerAuthz({"dev", "staging"}),
         index=FakeIndex([_record()]),
         capability=FakeCapability(approval),
         environments={k: Environment.model_validate(v) for k, v in CFG["environments"].items()},
@@ -176,6 +181,46 @@ def test_confirm_triggers_destroy():
     )
     assert ("destroy", "U1", "shop") in deps.lifecycle.calls
     assert {"delete_original": True} in respond.calls
+
+
+def test_confirm_destroy_by_non_owner_is_denied_before_destroy():
+    deps, _ = make_deps()
+    client, ack, respond = FakeClient(), Ack(), Respond()
+    body = _button_body("confirm_destroy::shop")
+    body["user"] = {"id": "U-OTHER"}
+    actions.handle_confirm_destroy(deps, ack, body, client, respond)
+    assert not [c for c in deps.lifecycle.calls if c[0] == "destroy"]
+    assert not client.named("chat_update")  # no Destroying repaint of the owner's thread
+    msg = client.named("chat_postEphemeral")[0]["text"]
+    assert "not allowed" in msg
+
+
+SECRET = "https://github.com/org/secret-repo/path/x"
+
+
+def test_deploy_unexpected_error_hides_internal_text():
+    deps, _ = make_deps(FakeLifecycle(deploy_exc=RuntimeError(SECRET)))
+    client = FakeClient()
+    actions.handle_submit(deps, Ack(), _submit_body(), client)
+    rendered = json.dumps(client.calls, default=str)
+    assert SECRET not in rendered and "secret-repo" not in rendered
+    assert "unexpected error occurred" in json.dumps(client.named("chat_update")[-1]["blocks"])
+
+
+def test_destroy_unexpected_error_hides_internal_text():
+    lifecycle = FakeLifecycle()
+
+    def boom(user, stack):
+        raise RuntimeError(SECRET)
+
+    lifecycle.destroy = boom
+    deps, _ = make_deps(lifecycle)
+    client = FakeClient()
+    actions.handle_confirm_destroy(
+        deps, Ack(), _button_body("confirm_destroy::shop"), client, Respond()
+    )
+    text = client.named("chat_postEphemeral")[0]["text"]
+    assert SECRET not in text and "unexpected error occurred" in text
 
 
 def test_submit_posts_message_then_calls_deploy_with_thread_ts():

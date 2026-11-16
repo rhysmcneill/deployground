@@ -110,12 +110,13 @@ class Reaper:
     def _destroy(self, record: StackRecord) -> None:
         try:
             self._lifecycle.destroy(record.owner, record.name)
-        except Exception as exc:
+        except Exception:
             log.exception("Reaper failed to destroy stack %s", record.name)
             try:
                 self._notifier.alert(
                     record,
-                    f"Automatic teardown of stack {record.name} failed ({exc}); will retry.",
+                    f"Automatic teardown of stack {record.name} failed; check the bot logs. "
+                    "Will retry.",
                 )
             except Exception:
                 log.exception("Reaper failed to alert owner of %s", record.name)

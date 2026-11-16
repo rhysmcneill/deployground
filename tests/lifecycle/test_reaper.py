@@ -38,7 +38,7 @@ class FakeLifecycle:
 
     def destroy(self, user: str, stack: str) -> None:
         if self.fail:
-            raise RuntimeError("boom")
+            raise RuntimeError("boom https://github.com/org/secret-repo")
         self.destroyed.append((user, stack))
         self.index.records.pop(stack, None)
 
@@ -114,6 +114,8 @@ def test_failed_destroy_retried_next_tick():
     reaper.tick()
     assert len(notifier.alerts) == 1
     assert notifier.alerts[0][0].name == "s"
+    assert "secret-repo" not in notifier.alerts[0][1]
+    assert "bot logs" in notifier.alerts[0][1]
     lifecycle.fail = False
     reaper.tick()
     assert lifecycle.destroyed == [("U1", "s")]

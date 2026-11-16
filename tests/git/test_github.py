@@ -1,6 +1,7 @@
 import base64
 from types import SimpleNamespace as NS
 
+import pytest
 from fastcore.net import HTTP404NotFoundError
 
 from deployground.config.models import RepoRef, TokenRef
@@ -118,6 +119,13 @@ def test_list_files_returns_paths_and_content_under_prefix():
     assert sorted(files) == [("stacks/a.yaml", "A"), ("stacks/b.yaml", "B")]
     tree_call = next(kw for n, kw in api.calls if n == "get_tree")
     assert tree_call["tree_sha"] == "main"
+
+
+def test_list_files_raises_when_tree_truncated():
+    api = FakeApi({"a/x.yaml": "x"})
+    api.git.get_tree = lambda **kw: NS(tree=[], truncated=True)
+    with pytest.raises(RuntimeError, match=r"truncated for .*under 'a/'"):
+        client_with(api).list_files(REPO, "a/")
 
 
 def test_branch_name_is_slugged_and_prefixed():
