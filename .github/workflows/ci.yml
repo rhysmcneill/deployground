@@ -22,3 +22,8 @@ jobs:
 
       - name: Test
         run: pytest
+
+      - name: Helm lint
+        run: |
+          helm lint helm/deployground
+          helm lint charts/golden-path --set image=ghcr.io/my-org/app:v1.0.0

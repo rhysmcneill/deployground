@@ -1,0 +1,76 @@
+# Example Deployground configuration (homelab-ish). Replace the placeholder names.
+# Secrets are never inlined: only the NAMES of env vars that hold them.
+git:
+  provider: github
+  repos:
+    gitops-nonprod:
+      owner: my-org
+      name: gitops-nonprod
+      branch: main
+      authRef: { tokenEnv: GITHUB_TOKEN_NONPROD }
+    gitops-prod:
+      owner: my-org
+      name: gitops-prod
+      branch: main
+      authRef: { tokenEnv: GITHUB_TOKEN_PROD }
+
+deployTarget:
+  type: applicationset # or: application
+  repo: gitops-nonprod # which configured repo holds the component files
+  pathTemplate: "{env}/{stack}/{component}/config.yaml"
+
+environments:
+  homelab:
+    cluster: homelab # the cluster name as registered in Argo CD
+    repo: gitops-nonprod
+    autoMerge: true
+    ttl: { default: 24h, max: 168h }
+    requiresApproval: false
+  prod:
+    cluster: prod
+    repo: gitops-prod
+    autoMerge: false
+    ttl: { default: none }
+    requiresApproval: true
+
+stacks:
+  api:
+    components:
+      api: { image: ghcr.io/my-org/api, defaultVersion: v1.2.3, port: 8080 }
+  pool-party:
+    components:
+      api: { image: ghcr.io/my-org/api, defaultVersion: v1.2.3, port: 8080 }
+      web:
+        image: ghcr.io/my-org/web
+        defaultVersion: v4.5.6
+        port: 3000
+        ingressHost: pool-party.home.example.com
+      worker: { image: ghcr.io/my-org/worker, defaultVersion: v2.0.0 }
+
+capabilities:
+  image-deploy:
+    enabled: true
+    allowedRegistries: ["ghcr.io/my-org"]
+    ingressDomains: ["home.example.com"]
+
+# Default deny. Slack IDs: S... usergroup, C... channel, U... user.
+access:
+  rules:
+    - { group: S012ADMIN, environments: ["*"], admin: true }
+    - { channel: C0DEPLOY, environments: [homelab] }
+    - { user: U012ABC, environments: ["*"] }
+    - { group: S0PRODTEAM, environments: [prod] }
+
+statusSource:
+  type: argocd-notifications # or: argocd-api (pull; see docs/quickstart.md)
+  webhookPath: /argocd/notifications
+  # Optional shared secret: the bot requires the X-Deployground-Token header to match
+  # the value of this env var.
+  secretRef: { tokenEnv: DG_WEBHOOK_TOKEN }
+  # argocd-api alternative:
+  #   type: argocd-api
+  #   url: https://argocd.example.com
+  #   tokenRef: { tokenEnv: ARGOCD_TOKEN }
+  #   pollInterval: 15s
+
+lifecycle: { warnBefore: 1h, reaperInterval: 1m, maxLivePerUser: 10 }
