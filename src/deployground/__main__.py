@@ -29,6 +29,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 1
     except KeyboardInterrupt:
         pass
+    except Exception as exc:
+        logging.getLogger(__name__).exception("fatal error")
+        print(f"Fatal error: {exc}", file=sys.stderr)
+        return 1
     return 0
 
 

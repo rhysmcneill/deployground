@@ -39,28 +39,31 @@ class StatusProgressBridge:
             return dict(self._overall)
 
     def forget(self, stack: str) -> None:
-        """Drop all state for a destroyed stack."""
+        """Drop all state for a destroyed stack (app.py calls it after each destroy)."""
         self._deduper.clear(stack)
         with self._lock:
             self._states.pop(stack, None)
             self._overall.pop(stack, None)
 
     def handle(self, event: StatusEvent) -> None:
+        record = self._index.get(event.stack_id)
+        if record is None:
+            # Unknown or destroyed stack (e.g. a late Argo event): keep no state, so a
+            # redeploy of the same name starts fresh.
+            return
         if self._deduper.seen(event):
             return
-        record = self._index.get(event.stack_id)
         with self._lock:
             states = self._states.get(event.stack_id)
             if states is None:
-                seed = record.components if record else {}
-                states = self._states[event.stack_id] = {n: CompState.Progressing for n in seed}
+                states = self._states[event.stack_id] = {
+                    n: CompState.Progressing for n in record.components
+                }
             states[event.component] = event.state
             snapshot = dict(states)
             overall = aggregate(snapshot)
             previous = self._overall.get(event.stack_id)
             self._overall[event.stack_id] = overall
-        if record is None:
-            return  # unknown stack (e.g. already destroyed): state kept, nothing to render
         update_thread(self._client, record, render_progress(record.name, snapshot, overall))
         if overall is StackState.Running and previous is not StackState.Running:
             self._post(record, completion_blocks(record.name, ok=True, owner=record.owner))

@@ -23,6 +23,8 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
 
+import uvicorn
+
 from deployground.authz.allowlist import AllowlistAuthz
 from deployground.capability.base import RenderContext
 from deployground.capability.image_deploy import ImageDeployCapability
@@ -44,6 +46,33 @@ from deployground.status.bridge import StatusProgressBridge
 log = logging.getLogger(__name__)
 
 DEFAULT_WEBHOOK_PORT = 8080
+
+
+def asgi3_config(asgi_app: Any, host: str, port: int) -> Any:
+    """uvicorn config for a bound-method ASGI app.
+
+    uvicorn auto-detects a bound method as ASGI2 (called as ``app(scope)``), which would
+    500 every request, so the interface is pinned to asgi3.
+    """
+    return uvicorn.Config(
+        asgi_app, host=host, port=port, interface="asgi3", lifespan="off", log_level="info"
+    )
+
+
+class _ForgetOnDestroy:
+    """Wraps LifecycleService so every successful destroy (Slack button or reaper) also
+    drops the stack's bridge state; everything else is delegated untouched."""
+
+    def __init__(self, lifecycle: Any, forget: Any) -> None:
+        self._lifecycle = lifecycle
+        self._forget = forget
+
+    def destroy(self, user: str, stack: str) -> None:
+        self._lifecycle.destroy(user, stack)
+        self._forget(stack)
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._lifecycle, name)
 
 
 class StartupError(RuntimeError):
@@ -73,13 +102,18 @@ class Application:
             raise StartupError(f"cannot rebuild the stack index from Git: {exc}") from exc
         log.info("index rebuilt: %d live stacks", len(self.index.list_live()))
 
-        self.status_source.start(self.bridge.handle)
-        asgi_app = getattr(self.status_source, "asgi_app", None)
-        if asgi_app is not None:
-            self._serve_webhook(asgi_app)
+        # The reaper guards core state (expiry); status is best-effort, so it starts first
+        # and a dead status source (port in use, Argo unreachable) only degrades progress.
         threading.Thread(
             target=self.reaper.run, args=(self._stop,), name="reaper", daemon=True
         ).start()
+        try:
+            self.status_source.start(self.bridge.handle)
+            asgi_app = getattr(self.status_source, "asgi_app", None)
+            if asgi_app is not None:
+                self._serve_webhook(asgi_app)
+        except Exception:
+            log.exception("status source failed to start; progress updates are disabled")
 
     def run(self) -> None:
         """Start all services, then block on Socket Mode until interrupted."""
@@ -105,13 +139,9 @@ class Application:
             server.should_exit = True
 
     def _serve_webhook(self, asgi_app: Any) -> None:
-        import uvicorn
-
         port = int(self.env.get("DG_WEBHOOK_PORT", DEFAULT_WEBHOOK_PORT))
         host = self.env.get("DG_WEBHOOK_HOST", "0.0.0.0")  # noqa: S104 - must accept Argo's POST
-        server = uvicorn.Server(
-            uvicorn.Config(asgi_app, host=host, port=port, lifespan="off", log_level="info")
-        )
+        server = uvicorn.Server(asgi3_config(asgi_app, host, port))
         self._servers.append(server)
         threading.Thread(target=server.run, name="webhook", daemon=True).start()
         log.info("notifications webhook listening on %s:%s", host, port)
@@ -124,6 +154,7 @@ def build_app(
     slack_client: Any | None = None,
     git_client: Any | None = None,
     status_source: StatusSource | None = None,
+    app_factory: Any | None = None,
 ) -> Application:
     watcher = config if isinstance(config, ConfigWatcher) else None
     cfg = watcher.current() if watcher else config
@@ -137,7 +168,10 @@ def build_app(
         token = env.get("SLACK_BOT_TOKEN")
         if not token:
             raise StartupError("environment variable SLACK_BOT_TOKEN is not set")
-        slack_app = App(token=token)
+        try:
+            slack_app = (app_factory or App)(token=token)
+        except Exception as exc:  # App() calls auth.test over the network
+            raise StartupError(f"Slack auth failed: {exc}") from exc
         slack_client = slack_app.client
 
     git = git_client or GitHubClient(env)
@@ -151,10 +185,13 @@ def build_app(
         cfg.access.rules, SlackMembershipResolver(slack_client), cfg.environments
     )
     capability = ImageDeployCapability()
+    capability_cfg = cfg.capabilities.get(capability.id)
+    if capability_cfg is None or not capability_cfg.enabled:
+        raise StartupError("config has no enabled image-deploy capability")
     render_ctx = RenderContext(
         catalog=catalog,
         deploy_target=deploy_target,
-        capability_cfg=cfg.capabilities[capability.id],
+        capability_cfg=capability_cfg,
         environments=cfg.environments,
     )
     lifecycle = LifecycleService(
@@ -169,6 +206,7 @@ def build_app(
     )
 
     bridge = StatusProgressBridge(index, slack_client)
+    lifecycle = _ForgetOnDestroy(lifecycle, bridge.forget)
     source = status_source or make_status_source(cfg.statusSource)
 
     warn_before = parse_duration(cfg.lifecycle.warnBefore)
