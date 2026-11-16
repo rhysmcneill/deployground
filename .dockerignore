@@ -1,0 +1,14 @@
+.venv
+.git
+.claude
+.superpowers
+tests
+__pycache__
+*.pyc
+*.egg-info
+.pytest_cache
+.ruff_cache
+docs
+charts
+helm
+.github

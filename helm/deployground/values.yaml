@@ -1,0 +1,56 @@
+# Deployground bot chart. Single replica by design: state lives in Git, warnings in memory.
+
+image:
+  repository: ghcr.io/rhysmcneill/deployground # published by CI on release
+  tag: "" # defaults to the chart appVersion
+  pullPolicy: IfNotPresent
+
+# Name of an existing Secret whose keys are injected as environment variables. It must hold:
+#   SLACK_BOT_TOKEN   (xoxb-...)
+#   SLACK_APP_TOKEN   (xapp-..., connections:write)
+# plus every token env var the config references, e.g. GITHUB_TOKEN_NONPROD, GITHUB_TOKEN_PROD,
+# DG_WEBHOOK_TOKEN (statusSource.secretRef) or ARGOCD_TOKEN (statusSource.tokenRef).
+existingSecret: deployground-secrets
+
+# Non-secret environment variables, e.g. DG_DEFAULT_CHANNEL. Do not use the DEPLOYGROUND_
+# prefix here: the config loader treats it as a config override.
+env:
+  DG_DEFAULT_CHANNEL: ""
+  DG_WEBHOOK_PORT: "8080"
+
+# Status webhook Service (Argo CD Notifications posts here). The bootstrap ConfigMap assumes
+# http://deployground.<namespace>.svc.cluster.local, i.e. port 80.
+service:
+  port: 80
+
+# Rendered to a ConfigMap and mounted as the --config file. See examples/config.yaml
+# for a full example, or pass one with: helm install ... -f my-values.yaml
+config:
+  git:
+    provider: github
+    repos: {}
+  deployTarget:
+    type: applicationset
+    repo: ""
+    pathTemplate: "{env}/{stack}/{component}/config.yaml"
+  environments: {}
+  stacks: {}
+  capabilities: {}
+  access:
+    rules: []
+  statusSource:
+    type: argocd-notifications
+    webhookPath: /argocd/notifications
+  lifecycle:
+    warnBefore: 1h
+    reaperInterval: 1m
+    maxLivePerUser: 10
+
+resources:
+  requests: { cpu: 50m, memory: 128Mi }
+  limits: { memory: 256Mi }
+
+podAnnotations: {}
+nodeSelector: {}
+tolerations: []
+affinity: {}

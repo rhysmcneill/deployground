@@ -1,0 +1,15 @@
+# Defaults. A component file (written by Deployground) overrides image/port/replicas/
+# ingressHost/env/secretRefs. The `deployground:` metadata block in that file is ignored here.
+
+image: "" # full reference including tag, e.g. ghcr.io/my-org/api:v1.2.3 (required)
+port: null # container port; when null no Service or Ingress is rendered
+replicas: 1
+ingressHost: "" # when set (and port is set) an Ingress is rendered for this host
+ingressClassName: "" # empty = cluster default
+env: {} # NAME: value
+secretRefs: [] # names of existing Secrets injected with envFrom
+
+# Resource requests/limits live here, not in component files (design spec section 8).
+resources:
+  requests: { cpu: 50m, memory: 64Mi }
+  limits: { memory: 256Mi }
