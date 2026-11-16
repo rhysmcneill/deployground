@@ -16,6 +16,7 @@ dependencies = [
     "ghapi",
     "httpx",
     "PyYAML",
+    "uvicorn",
 ]
 
 [project.optional-dependencies]
