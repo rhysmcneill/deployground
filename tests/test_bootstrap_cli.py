@@ -42,6 +42,7 @@ def test_slack_manifest_has_required_settings():
     assert manifest["settings"]["socket_mode_enabled"] is True
     assert manifest["settings"]["interactivity"]["is_enabled"] is True
     assert manifest["features"]["app_home"]["home_tab_enabled"] is True
+    assert "app_home_opened" in manifest["settings"]["event_subscriptions"]["bot_events"]
     shortcuts = manifest["features"]["shortcuts"]
     assert any(s["callback_id"] == "open_deploy_form" and s["type"] == "global" for s in shortcuts)
     scopes = set(manifest["oauth_config"]["scopes"]["bot"])
