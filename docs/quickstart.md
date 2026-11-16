@@ -51,8 +51,10 @@ Create the Secret with every env var the chart and config need:
 
 The chart reads the Secret named by `existingSecret` (default `deployground-secrets`) via
 `envFrom`, so key names are the env var names. Put your config under `config:` in a values file
-(it is rendered to a ConfigMap mounted as `--config`) and set `image.repository` / `image.tag` to
-an image of this project that you built and pushed:
+(it is rendered to a ConfigMap mounted as `--config`) and optionally pin `image.tag`.
+Multi-arch images (amd64/arm64) are published to `ghcr.io/rhysmcneill/deployground:<version>` on
+each release (the tag defaults to the chart `appVersion`); or build locally with the repo
+`Dockerfile`:
 
     helm install deployground helm/deployground -n deployground -f my-values.yaml
 

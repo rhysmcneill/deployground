@@ -1,7 +1,7 @@
 # Deployground bot chart. Single replica by design: state lives in Git, warnings in memory.
 
 image:
-  repository: ghcr.io/my-org/deployground # placeholder: build and push your own image
+  repository: ghcr.io/rhysmcneill/deployground # published by CI on release
   tag: "" # defaults to the chart appVersion
   pullPolicy: IfNotPresent
 
