@@ -39,6 +39,8 @@ from deployground.lifecycle.service import LifecycleService
 from deployground.slack.actions import Deps
 from deployground.slack.membership import SlackMembershipResolver
 from deployground.slack.notifier import SlackNotifier
+from deployground.slack.progress import render_progress, update_thread
+from deployground.states import StackState
 from deployground.status import make_status_source
 from deployground.status.base import StatusSource
 from deployground.status.bridge import StatusProgressBridge
@@ -60,16 +62,36 @@ def asgi3_config(asgi_app: Any, host: str, port: int) -> Any:
 
 
 class _ForgetOnDestroy:
-    """Wraps LifecycleService so every successful destroy (Slack button or reaper) also
-    drops the stack's bridge state; everything else is delegated untouched."""
+    """Wraps LifecycleService so every destroy (Slack button or reaper) also moves the stack's
+    thread Destroying -> Destroyed and, on success, drops the stack's bridge state; everything
+    else is delegated untouched. A failed destroy puts the thread back to its last status."""
 
-    def __init__(self, lifecycle: Any, forget: Any) -> None:
+    def __init__(self, lifecycle: Any, index: Any, client: Any, bridge: Any) -> None:
         self._lifecycle = lifecycle
-        self._forget = forget
+        self._index = index
+        self._client = client
+        self._bridge = bridge
+
+    def _show(self, record: Any, state: StackState) -> None:
+        try:
+            update_thread(self._client, record, render_progress(record.name, {}, state))
+        except Exception:
+            log.warning("could not update thread for %s", record.name, exc_info=True)
 
     def destroy(self, user: str, stack: str) -> None:
-        self._lifecycle.destroy(user, stack)
-        self._forget(stack)
+        record = self._index.get(stack)
+        previous = self._bridge.statuses().get(stack, StackState.Running)
+        if record is not None:
+            self._show(record, StackState.Destroying)
+        try:
+            self._lifecycle.destroy(user, stack)
+        except Exception:
+            if record is not None:
+                self._show(record, previous)
+            raise
+        self._bridge.forget(stack)
+        if record is not None:
+            self._show(record, StackState.Destroyed)
 
     def __getattr__(self, name: str) -> Any:
         return getattr(self._lifecycle, name)
@@ -206,7 +228,7 @@ def build_app(
     )
 
     bridge = StatusProgressBridge(index, slack_client)
-    lifecycle = _ForgetOnDestroy(lifecycle, bridge.forget)
+    lifecycle = _ForgetOnDestroy(lifecycle, index, slack_client, bridge)
     source = status_source or make_status_source(cfg.statusSource)
 
     warn_before = parse_duration(cfg.lifecycle.warnBefore)
