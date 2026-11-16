@@ -228,3 +228,76 @@ def test_deploy_same_stack_different_env_denied():
     with pytest.raises(Denied, match="already exists"):
         deploy(svc, user="U1", env="prod")
     assert git.prs == []
+
+
+# --- deploy reservations (check-and-reserve is atomic under svc._lock; seeding
+# svc._reservations simulates an in-flight deploy deterministically, without threads) ---
+
+
+def test_reserved_stack_name_denies_second_deploy_without_pr():
+    svc, git, _, _ = make_service()
+    svc._reservations["demo"] = "U2"
+    with pytest.raises(Denied, match="already in progress"):
+        deploy(svc)
+    assert git.prs == []
+    assert svc._reservations == {"demo": "U2"}  # the other deploy's reservation is untouched
+
+
+def test_reservations_count_toward_max_live_per_user():
+    svc, git, _, _ = make_service(index=FakeIndex(live=1), max_live=3)
+    svc._reservations["other-a"] = "U1"
+    svc._reservations["other-b"] = "U2"  # another user's reservation does not count
+    deploy(svc)  # 1 live + 1 reserved = 2 < 3
+    assert len(git.prs) == 1
+    svc2, git2, _, _ = make_service(index=FakeIndex(live=1), max_live=3)
+    svc2._reservations["other-a"] = "U1"
+    svc2._reservations["other-b"] = "U1"  # 1 + 2 = 3 >= 3
+    with pytest.raises(Denied):
+        deploy(svc2)
+    assert git2.prs == []
+
+
+def test_successful_deploy_releases_its_reservation():
+    svc, _, _, index = make_service()
+    deploy(svc)
+    assert svc._reservations == {}
+    assert "demo" in index.records
+
+
+def test_failed_render_leaves_no_reservation():
+    svc, _, cap, _ = make_service()
+    good_render = cap.render
+
+    def boom(inputs, ctx):
+        raise RuntimeError("render failed")
+
+    cap.render = boom
+    with pytest.raises(RuntimeError):
+        deploy(svc)
+    assert svc._reservations == {}
+    cap.render = good_render
+    assert deploy(svc).pr_number == 1  # same name succeeds afterwards
+
+
+def test_failed_open_pr_leaves_no_reservation():
+    svc, git, _, index = make_service()
+    good_open = git.open_pr
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("github down")
+
+    git.open_pr = boom
+    with pytest.raises(RuntimeError):
+        deploy(svc)
+    assert svc._reservations == {} and "demo" not in index.records
+    git.open_pr = good_open
+    deploy(svc)
+    assert len(git.prs) == 1
+
+
+def test_destroy_returns_pr_state():
+    from deployground.lifecycle.service import DestroyResult
+
+    svc, _, _, index = make_service()
+    index.records["demo"] = StackRecord("demo", "dev", "U1", NOW, "1.1", "C1")
+    assert svc.destroy("U1", "demo") == DestroyResult("https://pr/1", 1, True)

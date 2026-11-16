@@ -84,14 +84,27 @@ class _ForgetOnDestroy:
         if record is not None:
             self._show(record, StackState.Destroying)
         try:
-            self._lifecycle.destroy(user, stack)
+            result = self._lifecycle.destroy(user, stack)
         except Exception:
             if record is not None and previous is not None:
                 self._show(record, previous)
             raise
         self._bridge.forget(stack)
-        if record is not None:
+        if record is None:
+            return
+        if result.merged:
             self._show(record, StackState.Destroyed)
+            return
+        text = f"Destroy PR opened and awaiting review/merge: {result.pr_url}"
+        try:
+            self._client.chat_postMessage(
+                channel=record.channel,
+                thread_ts=record.thread_ts,
+                text=text,
+                blocks=[{"type": "section", "text": {"type": "mrkdwn", "text": text}}],
+            )
+        except Exception:
+            log.warning("could not post destroy PR notice for %s", record.name, exc_info=True)
 
     def __getattr__(self, name: str) -> Any:
         return getattr(self._lifecycle, name)

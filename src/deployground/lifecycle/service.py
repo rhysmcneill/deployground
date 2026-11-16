@@ -7,6 +7,7 @@ Approval flow (``Capability.needs_approval``) is intentionally NOT wired here; T
 surfaces it before calling ``deploy``.
 """
 
+import threading
 import uuid
 from collections.abc import Callable
 from dataclasses import dataclass, replace
@@ -35,6 +36,13 @@ class DeployResult:
     stack_record: StackRecord
 
 
+@dataclass(frozen=True)
+class DestroyResult:
+    pr_url: str
+    pr_number: int
+    merged: bool
+
+
 class LifecycleService:
     """``clock`` returns an aware UTC datetime (injectable for tests)."""
 
@@ -59,6 +67,9 @@ class LifecycleService:
         self._lifecycle_cfg = lifecycle_cfg
         self._ctx = render_ctx
         self._clock = clock or (lambda: datetime.now(UTC))
+        # In-flight deploy reservations (stack name -> owner), guarded by ``_lock``.
+        self._lock = threading.Lock()
+        self._reservations: dict[str, str] = {}
 
     def deploy(
         self,
@@ -71,19 +82,55 @@ class LifecycleService:
         thread_ts: str,
         channel: str,
     ) -> DeployResult:
+        """Open the deploy PR and record the stack.
+
+        The exists/cap checks and a reservation of the stack name happen atomically under
+        ``self._lock`` so concurrent deploys (slack-bolt uses a threadpool) cannot both pass
+        the checks. Reservations are in-memory: they bound the cap and exists checks against
+        concurrent in-flight deploys, and evaporate on restart (the index rebuilds from Git).
+        The lock is never held across the slow work (render + PR, a network call).
+        """
         if env not in self._environments or env not in self._authz.allowed_environments(user):
             raise Denied(f"You are not allowed to deploy to {env!r}.")
         env_cfg = self._environments[env]
-        existing = self._index.get(stack)
-        if existing is not None:
-            if existing.env != env:
-                raise Denied(f"Stack {stack!r} already exists in {existing.env!r}.")
-            if not self._authz.can_manage(user, existing.owner):
-                raise Denied(f"Stack {stack!r} already exists and is owned by someone else.")
-        limit = self._lifecycle_cfg.maxLivePerUser
-        if self._index.count_live_for(user) >= limit:
-            raise Denied(f"You already have {limit} live stacks (the maximum). Destroy one first.")
+        with self._lock:
+            if stack in self._reservations:
+                raise Denied(f"A deploy for {stack!r} is already in progress.")
+            existing = self._index.get(stack)
+            if existing is not None:
+                if existing.env != env:
+                    raise Denied(f"Stack {stack!r} already exists in {existing.env!r}.")
+                if not self._authz.can_manage(user, existing.owner):
+                    raise Denied(f"Stack {stack!r} already exists and is owned by someone else.")
+            limit = self._lifecycle_cfg.maxLivePerUser
+            pending = sum(1 for o in self._reservations.values() if o == user)
+            if self._index.count_live_for(user) + pending >= limit:
+                raise Denied(
+                    f"You already have {limit} live stacks (the maximum). Destroy one first."
+                )
+            self._reservations[stack] = user
+        try:
+            result = self._deploy_reserved(
+                user, owner_email, stack, env, env_cfg, overrides, ttl, thread_ts, channel
+            )
+        except BaseException:
+            with self._lock:
+                self._reservations.pop(stack, None)
+            raise
+        return result
 
+    def _deploy_reserved(
+        self,
+        user: str,
+        owner_email: str,
+        stack: str,
+        env: str,
+        env_cfg: Environment,
+        overrides: dict[str, str],
+        ttl: str | None,
+        thread_ts: str,
+        channel: str,
+    ) -> DeployResult:
         ttl_text, ttl_delta = self._resolve_ttl(user, ttl, env_cfg)
         now = self._clock()
         expires_at = None if ttl_delta is None else now + ttl_delta
@@ -126,7 +173,9 @@ class LifecycleService:
                 for name, comp in resolved.items()
             },
         )
-        self._index.upsert(record)
+        with self._lock:
+            self._index.upsert(record)
+            self._reservations.pop(stack, None)
         return DeployResult(
             pr_url=pr.url,
             pr_number=pr.number,
@@ -163,14 +212,15 @@ class LifecycleService:
         )
         self._index.upsert(replace(record, expires_at=new_expiry, components=components))
 
-    def destroy(self, user: str, stack: str) -> None:
+    def destroy(self, user: str, stack: str) -> DestroyResult:
         record = self._managed(user, stack)
         changes = self._capability.destroy(record, self._ctx)
         env_cfg = self._environments[record.env]
-        self._open_pr(
+        pr = self._open_pr(
             "destroy", stack, record.env, env_cfg, f"Destroy {stack} in {record.env}", changes
         )
         self._index.remove(stack)
+        return DestroyResult(pr_url=pr.url, pr_number=pr.number, merged=pr.merged)
 
     def _managed(self, user: str, stack: str) -> StackRecord:
         record = self._index.get(stack)

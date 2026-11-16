@@ -5,6 +5,7 @@ import pytest
 
 from deployground.app import StartupError, asgi3_config, build_app
 from deployground.config.models import Config
+from deployground.lifecycle.service import DestroyResult
 from deployground.states import CompState
 from deployground.status.base import StatusEvent
 from deployground.status.notifications import NotificationsSource
@@ -44,7 +45,12 @@ def test_redeploy_after_destroy_reemits_completion():
         assert app.bridge.statuses()
 
         record = app.index.get("api")
-        app.deps.lifecycle._lifecycle.destroy = lambda user, stack: app.index.remove(stack)
+
+        def fake_destroy(user, stack):
+            app.index.remove(stack)
+            return DestroyResult("https://pr/1", 1, True)
+
+        app.deps.lifecycle._lifecycle.destroy = fake_destroy
         app.deps.lifecycle.destroy("U1", "api")
         assert app.bridge.statuses() == {}
 
@@ -110,3 +116,59 @@ def test_failed_destroy_without_prior_status_does_not_repaint_running():
     with pytest.raises(RuntimeError):
         wrapper.destroy("U1", "s")
     assert [s.name for s in shown] == ["Destroying"]  # no Running (or any) restore
+
+
+def _destroy_wrapper(merged):
+    from types import SimpleNamespace
+
+    from deployground.app import _ForgetOnDestroy
+    from deployground.lifecycle.service import DestroyResult
+
+    shown, posts, forgot = [], [], []
+
+    class Lifecycle:
+        def destroy(self, user, stack):
+            return DestroyResult("https://pr/9", 9, merged)
+
+    class Bridge:
+        def statuses(self):
+            return {}
+
+        def forget(self, stack):
+            forgot.append(stack)
+
+    class Client:
+        def chat_postMessage(self, **kwargs):
+            posts.append(kwargs)
+
+    record = SimpleNamespace(name="s", channel="C1", thread_ts="1.1")
+    index = SimpleNamespace(get=lambda stack: record)
+    wrapper = _ForgetOnDestroy(Lifecycle(), index, Client(), Bridge())
+    wrapper._show = lambda rec, state: shown.append(state.name)
+    return wrapper, shown, posts, forgot
+
+
+def test_merged_destroy_renders_destroyed():
+    wrapper, shown, posts, forgot = _destroy_wrapper(merged=True)
+    wrapper.destroy("U1", "s")
+    assert shown == ["Destroying", "Destroyed"] and posts == [] and forgot == ["s"]
+
+
+def test_unmerged_destroy_stays_destroying_and_posts_pr_url():
+    wrapper, shown, posts, forgot = _destroy_wrapper(merged=False)
+    wrapper.destroy("U1", "s")
+    assert shown == ["Destroying"] and forgot == ["s"]
+    assert len(posts) == 1
+    assert posts[0]["channel"] == "C1" and posts[0]["thread_ts"] == "1.1"
+    assert "https://pr/9" in posts[0]["text"] and "awaiting" in posts[0]["text"]
+
+
+def test_unmerged_destroy_post_failure_is_non_fatal():
+    wrapper, shown, _, _ = _destroy_wrapper(merged=False)
+
+    def boom(**kwargs):
+        raise RuntimeError("slack down")
+
+    wrapper._client.chat_postMessage = boom
+    wrapper.destroy("U1", "s")  # must not raise
+    assert shown == ["Destroying"]
