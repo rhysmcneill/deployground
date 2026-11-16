@@ -64,6 +64,9 @@ access:
 statusSource:
   type: argocd-notifications # or: argocd-api (pull; see docs/quickstart.md)
   webhookPath: /argocd/notifications
+  # Base URL (no path) Argo CD uses to reach the bot; defaults to the in-cluster Service DNS.
+  # Use an ingress URL if Argo CD runs in a different cluster.
+  # webhookUrl: http://deployground.deployground.svc.cluster.local
   # Optional shared secret: the bot requires the X-Deployground-Token header to match
   # the value of this env var.
   secretRef: { tokenEnv: DG_WEBHOOK_TOKEN }

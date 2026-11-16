@@ -82,10 +82,9 @@ existing notification config first.
 The ApplicationSet deploys with `path: golden-path`: copy `charts/golden-path` to `golden-path/`
 at the root of the target GitOps repo (see `charts/golden-path/README.md`).
 
-The webhook URL in the ConfigMap is a placeholder
-(`http://deployground.deployground.svc.cluster.local<webhookPath>`, matching the chart's Service
-when installed as release `deployground` in namespace `deployground`); adjust it if you install
-elsewhere.
+The webhook URL in the ConfigMap is `<statusSource.webhookUrl><webhookPath>`; see section 5 for
+`webhookUrl` (it defaults to the in-cluster Service DNS for release `deployground` in namespace
+`deployground`).
 
 ## 5. Status connectivity (per Argo CD instance)
 
@@ -94,6 +93,11 @@ How deploy progress reaches Slack is set per Argo CD via `statusSource`:
 - **Push (default), `type: argocd-notifications`**: Argo CD Notifications POSTs to the bot's
   webhook (`statusSource.webhookPath`, served on `DG_WEBHOOK_PORT`). Needs network from Argo CD
   to the bot's Service. Best when the bot runs in or next to the Argo cluster.
+  `statusSource.webhookUrl` is the base URL (scheme + host [+ port], no path) Argo uses; the
+  path is appended. It defaults to the in-cluster Service DNS
+  (`http://deployground.deployground.svc.cluster.local`); the Helm chart fills in your own
+  release/namespace automatically. If Argo CD runs in a different cluster from the bot, set it
+  to an ingress / externally-reachable URL (e.g. `https://deployground.example.com`).
 - **Pull, `type: argocd-api`**: the bot polls Argo CD's API. Set `url`, `tokenRef:
   {tokenEnv: ARGOCD_TOKEN}` and `pollInterval`. Needs network from the bot to Argo CD, and no
   notifications setup; use it when Argo cannot reach the bot.

@@ -7,4 +7,15 @@ metadata:
     app.kubernetes.io/instance: {{ .Release.Name }}
 data:
   config.yaml: |
-{{ .Values.config | toYaml | indent 4 }}
+{{- /*
+  Default statusSource.webhookUrl to this release's own Service DNS (the Argo notifications
+  webhook target) unless the operator set one. Port is omitted when it is 80.
+*/ -}}
+{{- $cfg := deepCopy .Values.config }}
+{{- $status := $cfg.statusSource | default dict }}
+{{- if not $status.webhookUrl }}
+{{- $port := ternary "" (printf ":%v" .Values.service.port) (eq (int .Values.service.port) 80) }}
+{{- $_ := set $status "webhookUrl" (printf "http://%s.%s.svc.cluster.local%s" .Release.Name .Release.Namespace $port) }}
+{{- $_ := set $cfg "statusSource" $status }}
+{{- end }}
+{{ $cfg | toYaml | indent 4 }}

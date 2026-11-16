@@ -110,6 +110,11 @@ class DeployTargetCfg(_Model):
 class StatusSourceCfg(_Model):
     type: Literal["argocd-notifications", "argocd-api"]
     webhookPath: str | None = None
+    # Externally-reachable base URL of the bot's status webhook (scheme + host [+ port], NO
+    # path), e.g. the in-cluster Service DNS `http://deployground.deployground.svc.cluster.local`,
+    # or an ingress URL when Argo runs in another cluster. `webhookPath` is appended to it.
+    # Defaults to the in-cluster Service DNS for the default release name/namespace.
+    webhookUrl: str | None = None
     url: str | None = None
     tokenRef: TokenRef | None = None
     pollInterval: Duration | None = None

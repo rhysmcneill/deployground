@@ -13,6 +13,8 @@ from deployground.config.models import Config
 SUBSCRIBE_TRIGGERS = ("on-deployed", "on-health-degraded", "on-sync-failed")
 NOTIFICATION_SERVICE = "deployground"
 DEFAULT_WEBHOOK_PATH = "/webhooks/argocd"
+# In-cluster Service DNS for the default release name/namespace (`deployground`).
+DEFAULT_WEBHOOK_BASE_URL = "http://deployground.deployground.svc.cluster.local"
 
 
 def subscribe_annotations() -> dict[str, str]:
@@ -53,6 +55,7 @@ _TRIGGER_WHEN = {
 
 def notifications_cm(config: Config) -> dict[str, Any]:
     webhook_path = config.statusSource.webhookPath or DEFAULT_WEBHOOK_PATH
+    base = config.statusSource.webhookUrl or DEFAULT_WEBHOOK_BASE_URL
     headers = [{"name": "Content-Type", "value": "application/json"}]
     if config.statusSource.secretRef is not None:
         # Operator: set `deployground-webhook-token` in argocd-notifications-secret to the value
@@ -61,8 +64,7 @@ def notifications_cm(config: Config) -> dict[str, Any]:
     data: dict[str, str] = {
         f"service.webhook.{NOTIFICATION_SERVICE}": yaml.safe_dump(
             {
-                # Placeholder host: adjust to wherever the bot's webhook is reachable.
-                "url": f"http://deployground.deployground.svc.cluster.local{webhook_path}",
+                "url": f"{base.rstrip('/')}{webhook_path}",
                 "headers": headers,
             },
             sort_keys=False,
