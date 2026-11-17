@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.0](https://github.com/rhysmcneill/deployground/compare/deployground-v0.7.0...deployground-v0.8.0) (2026-11-17)
+
+
+### Features
+
+* **deploytarget:** label every managed namespace for cluster-wide resource targeting ([#41](https://github.com/rhysmcneill/deployground/issues/41)) ([70e005b](https://github.com/rhysmcneill/deployground/commit/70e005be412c718fb26af734c8ed8238767a5152))
+
 ## [0.7.0](https://github.com/rhysmcneill/deployground/compare/deployground-v0.6.11...deployground-v0.7.0) (2026-11-17)
 
 
