@@ -23,10 +23,14 @@ def chart_source(cfg: WorkloadChartCfg) -> dict[str, Any]:
     repo = cfg.repo or "ghcr.io/rhysmcneill"
     chart = cfg.chart or "golden-path-chart"
     version = cfg.version or __version__
-    # Argo CD's Helm-OCI source needs the chart name as its own `chart` field; baking it
-    # into repoURL leaves `chart` unset and Argo CD rejects the source outright.
+    # Argo CD's Helm-OCI source needs the chart name as its own `chart` field, and in that
+    # form repoURL is the bare registry host -- no oci:// scheme. (The oci:// form is only
+    # for baking the chart name directly into repoURL, which leaves `chart` unset and Argo
+    # CD rejects the source outright.) Matches the known-working convention already used
+    # for deployground's own app source: repoURL "ghcr.io/rhysmcneill", chart
+    # "deployground-chart".
     return {
-        "repoURL": f"oci://{repo}",
+        "repoURL": repo,
         "chart": chart,
         "targetRevision": version,
     }

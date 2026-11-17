@@ -172,7 +172,7 @@ def test_bootstrap_applicationset_templates_labels_annotations_and_subscription(
     sources = tmpl["spec"]["sources"]
     assert len(sources) == 2
     chart, values_ref = sources
-    assert chart["repoURL"] == "oci://ghcr.io/rhysmcneill"
+    assert chart["repoURL"] == "ghcr.io/rhysmcneill"
     assert chart["chart"] == "golden-path-chart"
     assert chart["targetRevision"] == deployground.__version__
     assert chart["helm"]["valueFiles"] == ["$values/{{path.path}}/{{path.filename}}"]
