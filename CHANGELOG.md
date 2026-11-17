@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.2](https://github.com/rhysmcneill/deployground/compare/deployground-v0.8.1...deployground-v0.8.2) (2026-11-17)
+
+
+### Bug Fixes
+
+* **golden-path-chart:** add tls.hosts for Tailscale ingress class ([#45](https://github.com/rhysmcneill/deployground/issues/45)) ([73950ec](https://github.com/rhysmcneill/deployground/commit/73950ec0d70cb8d1986b3dab3fcc269ef119bb68))
+
 ## [0.8.1](https://github.com/rhysmcneill/deployground/compare/deployground-v0.8.0...deployground-v0.8.1) (2026-11-17)
 
 
