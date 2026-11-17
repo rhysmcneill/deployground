@@ -128,6 +128,20 @@ def test_list_files_raises_when_tree_truncated():
         client_with(api).list_files(REPO, "a/")
 
 
+def test_api_constructs_ghapi_in_sync_mode(monkeypatch):
+    # GhApi defaults to an async client (ops return awaitables); this client is used from
+    # plain synchronous code, so every call site relies on sync=True actually being passed.
+    captured = {}
+
+    def fake_ghapi(**kwargs):
+        captured.update(kwargs)
+        return NS()
+
+    monkeypatch.setattr("deployground.git.github.GhApi", fake_ghapi)
+    GitHubClient(env={"GH_TOKEN": "t"})._api(REPO)
+    assert captured["sync"] is True
+
+
 def test_branch_name_is_slugged_and_prefixed():
     name = branch_name("Deploy My Stack!! to dev")
     assert name.startswith("deployground/deploy-my-stack-to-dev-")
