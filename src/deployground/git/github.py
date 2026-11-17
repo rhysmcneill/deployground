@@ -39,7 +39,9 @@ class GitHubClient:
         token = self._env.get(repo.authRef.tokenEnv)
         if not token:
             raise RuntimeError(f"environment variable {repo.authRef.tokenEnv} is not set")
-        return GhApi(owner=repo.owner, repo=repo.name, token=token)
+        # sync=True: GhApi defaults to an async client (ops return awaitables); this
+        # client is used from plain synchronous code throughout.
+        return GhApi(owner=repo.owner, repo=repo.name, token=token, sync=True)
 
     def open_pr(
         self,
