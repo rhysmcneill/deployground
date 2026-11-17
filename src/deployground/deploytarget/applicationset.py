@@ -13,6 +13,7 @@ import yaml
 from deployground.catalog import ResolvedComponent
 from deployground.config.models import Config, DeployTargetCfg, RepoRef
 from deployground.deploytarget.notifications import notifications_cm, subscribe_annotations
+from deployground.deploytarget.workloadchart import chart_source
 from deployground.git.base import FileChange
 from deployground.metadata import (
     ANNOTATION_PREFIX,
@@ -119,6 +120,14 @@ class ApplicationSetTarget:
         }
         annotations.update(subscribe_annotations())
 
+        source = chart_source(self._cfg.workloadChart)
+        source["helm"] = {"valueFiles": ["$values/{{path.path}}/{{path.filename}}"]}
+        values_source = {
+            "repoURL": repo_url,
+            "targetRevision": self._repo_ref.branch,
+            "ref": "values",
+        }
+
         return {
             "apiVersion": "argoproj.io/v1alpha1",
             "kind": "ApplicationSet",
@@ -142,12 +151,7 @@ class ApplicationSetTarget:
                     },
                     "spec": {
                         "project": "default",
-                        "source": {
-                            "repoURL": repo_url,
-                            "targetRevision": self._repo_ref.branch,
-                            "path": "golden-path",
-                            "helm": {"valueFiles": ["../{{path.path}}/{{path.filename}}"]},
-                        },
+                        "sources": [source, values_source],
                         # The env's configured ArgoCD cluster; the stack is the namespace.
                         "destination": {"name": cluster, "namespace": _ref("stack")},
                         "syncPolicy": {

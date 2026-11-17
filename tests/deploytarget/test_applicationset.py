@@ -2,6 +2,7 @@ from datetime import UTC, datetime
 
 import yaml
 
+import deployground
 from deployground.catalog import ResolvedComponent
 from deployground.config.models import Config, DeployTargetCfg, RepoRef, TokenRef
 from deployground.deploytarget.applicationset import ApplicationSetTarget
@@ -152,6 +153,49 @@ def test_bootstrap_applicationset_templates_labels_annotations_and_subscription(
 
     assert tmpl["spec"]["syncPolicy"]["automated"]["prune"] is True
     assert "resources-finalizer.argocd.argoproj.io" in tmpl["metadata"]["finalizers"]
+
+    sources = tmpl["spec"]["sources"]
+    assert len(sources) == 2
+    chart, values_ref = sources
+    assert chart["repoURL"] == "oci://ghcr.io/rhysmcneill/golden-path"
+    assert chart["targetRevision"] == deployground.__version__
+    assert chart["helm"]["valueFiles"] == ["$values/{{path.path}}/{{path.filename}}"]
+    assert values_ref["repoURL"] == "https://github.com/acme/deploys.git"
+    assert values_ref["targetRevision"] == "main"
+    assert values_ref["ref"] == "values"
+
+
+def test_bootstrap_applicationset_chart_source_uses_git_override():
+    cfg = DeployTargetCfg(
+        type="applicationset",
+        repo="deploys",
+        pathTemplate=CFG.pathTemplate,
+        workloadChart={
+            "type": "git",
+            "gitRepo": "https://github.com/acme/charts.git",
+            "gitRef": "v1.0.0",
+            "chartPath": "charts/custom",
+        },
+    )
+    manifests = ApplicationSetTarget(cfg, REPO).bootstrap_manifests(make_config())
+    appset = yaml.safe_load(manifests["applicationset-dev.yaml"])
+    chart = appset["spec"]["template"]["spec"]["sources"][0]
+    assert chart["repoURL"] == "https://github.com/acme/charts.git"
+    assert chart["targetRevision"] == "v1.0.0"
+    assert chart["path"] == "charts/custom"
+
+
+def test_bootstrap_applicationset_chart_source_pins_explicit_version():
+    cfg = DeployTargetCfg(
+        type="applicationset",
+        repo="deploys",
+        pathTemplate=CFG.pathTemplate,
+        workloadChart={"version": "9.9.9"},
+    )
+    manifests = ApplicationSetTarget(cfg, REPO).bootstrap_manifests(make_config())
+    appset = yaml.safe_load(manifests["applicationset-dev.yaml"])
+    chart = appset["spec"]["template"]["spec"]["sources"][0]
+    assert chart["targetRevision"] == "9.9.9"
 
     cm = yaml.safe_load(manifests["argocd-notifications-cm.yaml"])
     assert cm["kind"] == "ConfigMap"
