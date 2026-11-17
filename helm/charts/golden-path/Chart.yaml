@@ -3,5 +3,5 @@ name: golden-path-chart
 description: Example workload chart consumed by the Deployground ApplicationSet
   (one component file per release)
 type: application
-version: 0.4.1
+version: 0.4.2
 appVersion: "0.1.0"
