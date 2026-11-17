@@ -27,9 +27,10 @@ class FakeGit:
         return self.files
 
 
-def comp(stack, component, owner="alice", expires_at=T1):
+def comp(stack, component, owner="alice", expires_at=T1, catalog=None):
     return ComponentRecord(
         stack=stack,
+        catalog=stack if catalog is None else catalog,
         component=component,
         owner=owner,
         owner_email=f"{owner}@example.com",
@@ -48,7 +49,13 @@ def file_for(record):
 
 def stack_record(name, owner="alice", expires_at=T1):
     return StackRecord(
-        name=name, env="dev", owner=owner, expires_at=expires_at, thread_ts="1.1", channel="C1"
+        name=name,
+        catalog=name,
+        env="dev",
+        owner=owner,
+        expires_at=expires_at,
+        thread_ts="1.1",
+        channel="C1",
     )
 
 
@@ -77,6 +84,28 @@ def test_rebuild_groups_components_by_stack():
     assert s2.owner == "bob"
     assert index.get("nope") is None
     assert len(index.list_live()) == 2
+
+
+def test_rebuild_carries_catalog_first_component_wins():
+    index, _ = make_index(
+        comp("s1", "api", catalog="homepage-test"),
+        comp("s1", "web", catalog="other-catalog"),
+    )
+    s1 = index.get("s1")
+    assert s1 is not None
+    assert s1.catalog == "homepage-test"
+    assert s1.components["api"].catalog == "homepage-test"
+
+
+def test_rebuild_legacy_file_without_catalog_defaults_to_stack():
+    block = to_metadata_block(comp("legacy", "api"))
+    del block["catalog"]  # legacy shape: no catalog key at all
+    legacy = ("stacks/legacy/api.yaml", yaml.safe_dump({"kind": "x", "deployground": block}))
+    index, _ = make_index(comp("s1", "web"), extra=[legacy])
+    got = index.get("legacy")
+    assert got is not None
+    assert got.catalog == "legacy"
+    assert got.name == "legacy"
 
 
 def test_list_expiring_filters_by_time():

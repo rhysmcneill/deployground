@@ -38,7 +38,9 @@ Slack/MS Teams etc form → authz check → render component files → one Git P
                     Slack thread updates live  ←  status (push or poll)
 ```
 
-1. **Pick a stack** from a Slack dropdown — one service, or many deployed together as a unit.
+1. **Pick a catalog entry** from a Slack dropdown — one service, or many deployed together as a
+   unit — and give your deploy its own **stack name**, so the same catalog entry can be live
+   under several names at once.
 2. **Override versions** per component if you need to (optional; everything else deploys at its
    configured default).
 3. Deployground **opens one PR** with every component's manifest, each stamped with an owner,
@@ -57,7 +59,8 @@ Access is **default-deny** and scoped by Slack user, usergroup, or channel, per 
 
 ```
 ┌─ New deployment ────────────────┐
-│ Stack:        [ my-stack    ▾ ] │
+│ Catalog:      [ my-catalog  ▾ ] │
+│ Stack name:   [ my-stack      ] │
 │ Environment:  [ dev         ▾ ] │
 │ Expires in:   [ 24h           ] │
 │ Override versions? (optional)   │

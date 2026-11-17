@@ -4,9 +4,11 @@ import yaml
 
 from deployground.cli import main
 from deployground.config.loader import load_config
+from deployground.config.models import Config
 
 ROOT = Path(__file__).parent.parent
 EXAMPLE = ROOT / "examples" / "config.yaml"
+CHART_VALUES = ROOT / "helm" / "charts" / "deployground" / "values.yaml"
 
 
 def test_bootstrap_emits_manifests_for_config(capsys):
@@ -44,6 +46,17 @@ def test_bootstrap_missing_file_exits_2(tmp_path, capsys):
 def test_example_config_passes_load_config():
     cfg = load_config(EXAMPLE, {})
     assert set(cfg.environments) == {"homelab", "prod"}
+
+
+def test_chart_default_config_validates():
+    """The Helm chart's default `config:` block must itself be a valid Config.
+
+    Catches drift like a stale/renamed top-level key (e.g. the pre-refactor `stacks`)
+    that `extra="forbid"` would otherwise only surface as a crash-looping pod.
+    """
+    values = yaml.safe_load(CHART_VALUES.read_text())
+    cfg = Config.model_validate(values["config"])
+    assert cfg.catalog == {}
 
 
 def test_slack_manifest_has_required_settings():

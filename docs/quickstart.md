@@ -28,7 +28,7 @@ there is **no** public URL, signing secret or event endpoint to configure.
 Copy `examples/config.yaml` and edit it: your repos, environments (each one's Argo CD
 destination -- `https://kubernetes.default.svc` if Argo CD manages its own cluster, or a
 registered cluster name for a multi-cluster Argo CD -- plus TTL, `autoMerge`,
-`requiresApproval`), the stack catalog, `capabilities.image-deploy.allowedRegistries`
+`requiresApproval`), the catalog (reusable component definitions), `capabilities.image-deploy.allowedRegistries`
 and `ingressDomains`, and `access.rules` (Slack user, usergroup or channel IDs; default deny).
 Config holds only the **names** of env vars for secrets (`authRef: {tokenEnv: GITHUB_TOKEN_NONPROD}`).
 Any key can also be overridden by an env var `DEPLOYGROUND_<PATH>` with `__` between segments,
@@ -136,6 +136,17 @@ then adds that header, sourced from the key `deployground-webhook-token` of
       -p '{"stringData":{"deployground-webhook-token":"<same value as DG_WEBHOOK_TOKEN>"}}'
 
 Without `secretRef` the endpoint is unauthenticated; restrict it with a NetworkPolicy.
+
+## 6. Deploying from Slack
+
+The deploy form has two naming fields that are easy to confuse:
+
+- **Catalog** (dropdown): *what to deploy*. It picks one entry from the `catalog:` block of the
+  config, and the entry's components are listed so you can override individual versions.
+- **Stack name** (free text): *what to call this deploy*. It is the name of your live deployment,
+  lowercase letters, numbers and hyphens, and it becomes the namespace and the default URL
+  (`{stack}` in an `ingressHost`). It does not have to match the catalog entry, so the same
+  catalog entry can be deployed several times under different stack names.
 
 ## Not covered yet
 

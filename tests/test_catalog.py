@@ -24,7 +24,7 @@ BASE = {
             "requiresApproval": False,
         }
     },
-    "stacks": {
+    "catalog": {
         "api": {
             "components": {
                 "api": {
@@ -42,9 +42,7 @@ BASE = {
             }
         },
     },
-    "capabilities": {
-        "image-deploy": {"enabled": True, "allowedRegistries": ["ghcr.io/my-org"]}
-    },
+    "capabilities": {"image-deploy": {"enabled": True, "allowedRegistries": ["ghcr.io/my-org"]}},
     "access": {"rules": [{"user": "U012ABC", "environments": ["*"]}]},
     "deployTarget": {
         "type": "applicationset",
@@ -62,7 +60,7 @@ def make_catalog() -> Catalog:
 
 def test_single_service_is_stack_of_one():
     catalog = make_catalog()
-    assert catalog.list_stacks() == ["api", "shop"]
+    assert catalog.list_entries() == ["api", "shop"]
     stack = catalog.get("api")
     assert list(stack.components) == ["api"]
     resolved = catalog.resolve_versions("api", {})
@@ -74,8 +72,8 @@ def test_single_service_is_stack_of_one():
 
 def test_resolve_versions_preserves_image_pull_secrets_and_service_account():
     cfg = Config.model_validate(BASE)
-    cfg.stacks["api"].components["api"].imagePullSecrets = ["harbor-pull"]
-    cfg.stacks["api"].components["api"].serviceAccountName = "my-irsa-sa"
+    cfg.catalog["api"].components["api"].imagePullSecrets = ["harbor-pull"]
+    cfg.catalog["api"].components["api"].serviceAccountName = "my-irsa-sa"
     catalog = Catalog(lambda: cfg)
     resolved = catalog.resolve_versions("api", {})
     assert resolved["api"].imagePullSecrets == ["harbor-pull"]
@@ -84,7 +82,7 @@ def test_resolve_versions_preserves_image_pull_secrets_and_service_account():
 
 def test_resolve_versions_preserves_ingress_class_name():
     cfg = Config.model_validate(BASE)
-    cfg.stacks["api"].components["api"].ingressClassName = "tailscale"
+    cfg.catalog["api"].components["api"].ingressClassName = "tailscale"
     catalog = Catalog(lambda: cfg)
     resolved = catalog.resolve_versions("api", {})
     assert resolved["api"].ingressClassName == "tailscale"

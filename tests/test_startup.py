@@ -20,6 +20,7 @@ EXPIRES = datetime.now(UTC) + timedelta(days=30)
 def component_file(component):
     record = ComponentRecord(
         stack="api",
+        catalog="api",
         component=component,
         owner="U1",
         owner_email="u1@example.com",

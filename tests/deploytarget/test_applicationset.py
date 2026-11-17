@@ -37,6 +37,7 @@ def resolved(name: str) -> ResolvedComponent:
 def record(name: str) -> ComponentRecord:
     return ComponentRecord(
         stack="demo",
+        catalog="demo",
         component=name,
         owner="U012ABC",
         owner_email="a@example.com",
@@ -72,7 +73,7 @@ def make_config() -> Config:
                 }
                 for name, cluster in (("dev", "dev-cluster"), ("prod", "prod-eks"))
             },
-            "stacks": {},
+            "catalog": {},
             "deployTarget": {
                 "type": "applicationset",
                 "repo": "deploys",

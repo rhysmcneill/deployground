@@ -18,7 +18,7 @@ class FakeClient:
 
 def test_reaper_drives_notifier_warn_and_alert():
     now = datetime(2026, 1, 1, tzinfo=UTC)
-    record = StackRecord("s", "dev", "U1", now + timedelta(minutes=30), "1.1", "C1")
+    record = StackRecord("s", "s", "dev", "U1", now + timedelta(minutes=30), "1.1", "C1")
 
     class Index:
         def list_expiring(self, before):

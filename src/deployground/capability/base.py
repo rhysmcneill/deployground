@@ -26,6 +26,7 @@ class RenderInputs:
     service (which owns the clock) from ``ttl``; the capability only stamps it into records
     (``None`` means the stack never expires)."""
 
+    catalog: str
     stack: str
     env: str
     overrides: dict[str, str]  # component name -> version

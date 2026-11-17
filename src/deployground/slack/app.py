@@ -26,15 +26,15 @@ def build_slack_app(deps: Deps, app: App | None = None) -> App:
     def _prefill(ack: Any, body: Any, client: Any) -> None:
         actions.handle_prefill(deps, ack, body, client)
 
-    for block in ("stack", OVERRIDE_PICKER_BLOCK):
+    for block in ("catalog", OVERRIDE_PICKER_BLOCK):
 
         @app.action({"block_id": block, "action_id": ACTION_ID})
         def _change(ack: Any, body: Any, client: Any) -> None:
             actions.handle_modal_change(deps, ack, body, client)
 
-    @app.options({"block_id": "stack", "action_id": ACTION_ID})
+    @app.options({"block_id": "catalog", "action_id": ACTION_ID})
     def _options(ack: Any, body: Any) -> None:
-        actions.handle_stack_options(deps, ack, body)
+        actions.handle_catalog_options(deps, ack, body)
 
     @app.view(CALLBACK_ID)
     def _submit(ack: Any, body: Any, client: Any) -> None:

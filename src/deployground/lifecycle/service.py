@@ -15,6 +15,7 @@ from datetime import UTC, datetime, timedelta
 
 from deployground.authz.base import AuthzProvider
 from deployground.capability.base import Capability, RenderContext, RenderInputs
+from deployground.catalog import UnknownStack
 from deployground.config.models import Environment, Lifecycle, RepoRef, parse_duration
 from deployground.git.base import GitClient, PrResult
 from deployground.index import StackIndex
@@ -75,6 +76,7 @@ class LifecycleService:
         self,
         user: str,
         owner_email: str,
+        catalog: str,
         stack: str,
         env: str,
         overrides: dict[str, str],
@@ -111,7 +113,7 @@ class LifecycleService:
             self._reservations[stack] = user
         try:
             result = self._deploy_reserved(
-                user, owner_email, stack, env, env_cfg, overrides, ttl, thread_ts, channel
+                user, owner_email, catalog, stack, env, env_cfg, overrides, ttl, thread_ts, channel
             )
         except BaseException:
             with self._lock:
@@ -123,6 +125,7 @@ class LifecycleService:
         self,
         user: str,
         owner_email: str,
+        catalog: str,
         stack: str,
         env: str,
         env_cfg: Environment,
@@ -136,6 +139,7 @@ class LifecycleService:
         expires_at = None if ttl_delta is None else now + ttl_delta
 
         inputs = RenderInputs(
+            catalog=catalog,
             stack=stack,
             env=env,
             overrides=overrides,
@@ -150,9 +154,10 @@ class LifecycleService:
         pr = self._open_pr("deploy", stack, env, env_cfg, f"Deploy {stack} to {env}", changes)
 
         # Same construction as the capability: catalog resolution + inputs, not parsed files.
-        resolved = self._ctx.catalog.resolve_versions(stack, overrides)
+        resolved = self._ctx.catalog.resolve_versions(catalog, overrides)
         record = StackRecord(
             name=stack,
+            catalog=catalog,
             env=env,
             owner=user,
             expires_at=expires_at,
@@ -161,6 +166,7 @@ class LifecycleService:
             components={
                 name: ComponentRecord(
                     stack=stack,
+                    catalog=catalog,
                     component=name,
                     owner=user,
                     owner_email=owner_email,
@@ -200,15 +206,29 @@ class LifecycleService:
         components = {
             name: replace(comp, expires_at=new_expiry) for name, comp in record.components.items()
         }
-        # Only components still present in the catalog are regenerated: a component the
-        # catalog has since dropped is kept in the record (with its expiry pushed out
+        # Only components still present in the catalog entry are regenerated: a component
+        # the catalog has since dropped -- or the whole catalog entry having been removed,
+        # reported as UnknownStack -- is kept in the record (with its expiry pushed out
         # above) but not resolved, since resolve_versions treats an unknown override name
         # as a typo and raises -- correct for a fresh deploy's user-supplied overrides,
         # wrong here, where the names come from what's already live, not user input.
-        catalog_components = self._ctx.catalog.get(stack).components
+        try:
+            catalog_components = self._ctx.catalog.get(record.catalog).components
+        except UnknownStack:
+            catalog_components = {}
         still_cataloged = {name: c for name, c in components.items() if name in catalog_components}
+        if not still_cataloged:
+            # Nothing can be regenerated at all: there is no PR to write the new expiry to
+            # git, so it would only ever live in memory and vanish on the next pod restart
+            # (StackIndex.rebuild() re-derives everything from git) -- potentially letting
+            # the reaper tear the stack down early despite the user being told it was
+            # extended. Fail loudly instead of silently "succeeding".
+            raise Denied(
+                f"Catalog entry {record.catalog!r} no longer exists; {stack!r} can't be "
+                "extended durably. Redeploy or destroy it."
+            )
         resolved = self._ctx.catalog.resolve_versions(
-            stack, {name: comp.version for name, comp in still_cataloged.items()}
+            record.catalog, {name: c.version for name, c in still_cataloged.items()}
         )
         # resolve_versions resolves every catalog-defined component regardless of which
         # names were in overrides, so narrow it back down to just the live, still-cataloged
@@ -218,7 +238,12 @@ class LifecycleService:
         changes = self._ctx.deploy_target.files_for(stack, record.env, resolved, components)
         env_cfg = self._environments[record.env]
         self._open_pr(
-            "extend", stack, record.env, env_cfg, f"Extend {stack} in {record.env} by {by}", changes
+            "extend",
+            stack,
+            record.env,
+            env_cfg,
+            f"Extend {stack} in {record.env} by {by}",
+            changes,
         )
         self._index.upsert(replace(record, expires_at=new_expiry, components=components))
 

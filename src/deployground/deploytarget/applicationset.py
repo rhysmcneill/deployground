@@ -30,6 +30,7 @@ FINALIZER = "resources-finalizer.argocd.argoproj.io"
 # annotation suffix -> key in the file's `deployground:` block
 _ANNOTATION_FIELDS = {
     "stack": "stack",
+    "catalog": "catalog",
     "component": "component",
     "owner": "owner",
     "owner-email": "ownerEmail",

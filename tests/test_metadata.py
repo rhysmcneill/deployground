@@ -18,9 +18,11 @@ from deployground.metadata import (
 
 def _record(
     expires_at: datetime | None = datetime(2026, 11, 13, 9, 0, tzinfo=UTC),
+    catalog: str = "api",
 ) -> ComponentRecord:
     return ComponentRecord(
         stack="api",
+        catalog=catalog,
         component="api-server",
         owner="rhys",
         owner_email="rhys@example.com",
@@ -44,6 +46,28 @@ def test_block_roundtrips_component_record_without_expiry():
     assert parse_metadata_block({"deployground": block}) == record
 
 
+def test_to_metadata_block_includes_catalog():
+    record = _record(catalog="homepage-test")
+    block = to_metadata_block(ComponentRecord(**{**record.__dict__, "stack": "pr-123"}))
+    assert block["catalog"] == "homepage-test"
+    assert block["stack"] == "pr-123"
+
+
+def test_block_roundtrips_catalog():
+    record = _record(catalog="homepage-test")
+    record = ComponentRecord(**{**record.__dict__, "stack": "pr-123"})
+    assert parse_metadata_block({"deployground": to_metadata_block(record)}) == record
+
+
+def test_block_without_catalog_defaults_to_stack():
+    record = _record()
+    block = to_metadata_block(record)
+    del block["catalog"]
+    parsed = parse_metadata_block({"deployground": block})
+    assert parsed.catalog == block["stack"]
+    assert parsed.catalog == record.stack
+
+
 def test_expires_at_is_rfc3339():
     block = to_metadata_block(_record())
     assert block["expiresAt"] == "2026-11-13T09:00:00Z"
@@ -53,6 +77,7 @@ def test_to_annotations_has_expected_keys():
     annotations = to_annotations(_record())
     assert set(annotations) == {
         "deployground.io/stack",
+        "deployground.io/catalog",
         "deployground.io/component",
         "deployground.io/owner",
         "deployground.io/owner-email",
@@ -102,6 +127,20 @@ def test_expires_at_rejects_naive_datetime():
 def test_annotations_roundtrip_component_record():
     for record in (_record(), _record(expires_at=None)):
         assert from_annotations(to_annotations(record)) == record
+
+
+def test_annotations_roundtrip_catalog():
+    record = _record(catalog="homepage-test")
+    record = ComponentRecord(**{**record.__dict__, "stack": "pr-123"})
+    assert from_annotations(to_annotations(record)) == record
+
+
+def test_from_annotations_without_catalog_defaults_to_stack():
+    record = _record()
+    annotations = to_annotations(record)
+    del annotations["deployground.io/catalog"]
+    parsed = from_annotations(annotations)
+    assert parsed.catalog == record.stack
 
 
 @pytest.mark.parametrize(

@@ -5,22 +5,25 @@ No slack_sdk/bolt imports; views and blocks are plain dicts (wiring lives in Tas
 Conventions Task 17 depends on:
 - Every input block holds exactly one element whose action_id is ``ACTION_ID`` ("val"),
   so state is read as ``view["state"]["values"][block_id]["val"]``.
-- Block ids: "stack", "env", "ttl", "override_components" (multi-select of components),
+- Block ids: "catalog" (which catalog entry to deploy), "stack" (the free-typed name for
+  this live deployment), "env", "ttl", "override_components" (multi-select of components),
   and "override::<component>" (one text input per overridden component).
-- The "stack" and "override_components" blocks have ``dispatch_action`` set, so choosing a
-  stack or picking components emits block_actions; the handler then calls views.update with
-  ``build_override_blocks`` output (preserve existing override values when re-rendering).
+- The "catalog" and "override_components" blocks have ``dispatch_action`` set, so picking a
+  catalog entry or picking components emits block_actions; the handler then calls
+  views.update with ``build_override_blocks`` output (preserve existing override values when
+  re-rendering). The "stack" block is a plain text input with no dispatch_action.
 - With no allowed environments the modal is a notice only (no input blocks, no submit).
 - Modal callback_id is "deploy_submit".
 """
 
+import re
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Any
 
 from deployground.authz.base import AuthzProvider
 from deployground.catalog import Catalog
-from deployground.config.models import StackDef, parse_duration
+from deployground.config.models import CatalogEntry, parse_duration
 
 View = dict[str, Any]
 Block = dict[str, Any]
@@ -31,10 +34,12 @@ STATIC_SELECT_LIMIT = 100
 DEFAULT_TTL = "24h"
 OVERRIDE_PREFIX = "override::"
 OVERRIDE_PICKER_BLOCK = "override_components"
+STACK_NAME_PATTERN = re.compile(r"^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$")
 
 
 @dataclass(frozen=True)
 class DeployInputs:
+    catalog: str
     stack: str
     env: str
     overrides: dict[str, str] = field(default_factory=dict)
@@ -61,14 +66,14 @@ def _input(block_id: str, label: str, element: dict[str, Any], **extra: Any) -> 
 
 
 def build_override_blocks(
-    stack: StackDef,
+    entry: CatalogEntry,
     selected_components: list[str],
     values: Mapping[str, str] | None = None,
 ) -> list[Block]:
     """One version input per selected component, prefilled to `values` or the default."""
     blocks: list[Block] = []
     for name in selected_components:
-        comp = stack.components.get(name)
+        comp = entry.components.get(name)
         if comp is None:
             continue
         initial = (values or {}).get(name, comp.defaultVersion)
@@ -88,7 +93,7 @@ def build_deploy_modal(
     authz: AuthzProvider,
     prefill: DeployInputs | None = None,
 ) -> View:
-    stacks = catalog.list_stacks()
+    entries = catalog.list_entries()
     envs = sorted(authz.allowed_environments(user))
     if not envs:
         # Notice-only view: no input blocks, so Slack requires no submit button.
@@ -109,24 +114,69 @@ def build_deploy_modal(
             ],
         }
 
-    if len(stacks) <= STATIC_SELECT_LIMIT:
-        stack_element: dict[str, Any] = {
+    if len(entries) <= STATIC_SELECT_LIMIT:
+        catalog_element: dict[str, Any] = {
             "type": "static_select",
-            "placeholder": _text("Select a stack"),
-            "options": [_option(s) for s in stacks],
+            "placeholder": _text("Select a catalog entry"),
+            "options": [_option(s) for s in entries],
         }
     else:
-        stack_element = {
+        catalog_element = {
             "type": "external_select",
-            "placeholder": _text("Search for a stack"),
+            "placeholder": _text("Search for a catalog entry"),
             "min_query_length": 0,
         }
-    known_stack = prefill is not None and prefill.stack in stacks
-    if known_stack:
+    known_catalog = prefill is not None and prefill.catalog in entries
+    if known_catalog:
         assert prefill is not None
-        stack_element["initial_option"] = _option(prefill.stack)
+        catalog_element["initial_option"] = _option(prefill.catalog)
 
-    blocks: list[Block] = [_input("stack", "Stack", stack_element, dispatch_action=True)]
+    blocks: list[Block] = [
+        {"type": "header", "text": _text("🚀  New deployment")},
+        _input(
+            "catalog",
+            "Catalog",
+            catalog_element,
+            dispatch_action=True,
+            hint=_text("What to deploy"),
+        ),
+    ]
+
+    if known_catalog:
+        assert prefill is not None
+        catalog_entry = catalog.get(prefill.catalog)
+        components = sorted(catalog_entry.components)
+        picker: dict[str, Any] = {
+            "type": "multi_static_select",
+            "placeholder": _text("Override component versions"),
+            "options": [_option(c) for c in components],
+        }
+        chosen = [c for c in sorted(prefill.overrides) if c in catalog_entry.components]
+        if chosen:
+            picker["initial_options"] = [_option(c) for c in chosen]
+        blocks.append(
+            _input(
+                OVERRIDE_PICKER_BLOCK,
+                "Override components",
+                picker,
+                optional=True,
+                dispatch_action=True,
+            )
+        )
+        blocks.extend(build_override_blocks(catalog_entry, chosen, prefill.overrides))
+
+    blocks.append(
+        _input(
+            "stack",
+            "Stack name",
+            {
+                "type": "plain_text_input",
+                "initial_value": prefill.stack if prefill else "",
+            },
+            hint=_text("Used for the namespace and URL — lowercase letters, numbers, hyphens"),
+        )
+    )
+    blocks.append({"type": "divider"})
 
     env_element: dict[str, Any] = {
         "type": "static_select",
@@ -146,29 +196,6 @@ def build_deploy_modal(
             hint=_text('e.g. 15m, 24h, 7d, or "none" for no expiry'),
         )
     )
-
-    if known_stack:
-        assert prefill is not None
-        stack_def = catalog.get(prefill.stack)
-        components = sorted(stack_def.components)
-        picker: dict[str, Any] = {
-            "type": "multi_static_select",
-            "placeholder": _text("Override component versions"),
-            "options": [_option(c) for c in components],
-        }
-        chosen = [c for c in sorted(prefill.overrides) if c in stack_def.components]
-        if chosen:
-            picker["initial_options"] = [_option(c) for c in chosen]
-        blocks.append(
-            _input(
-                OVERRIDE_PICKER_BLOCK,
-                "Override components",
-                picker,
-                optional=True,
-                dispatch_action=True,
-            )
-        )
-        blocks.extend(build_override_blocks(stack_def, chosen, prefill.overrides))
 
     view: View = {
         "type": "modal",
@@ -198,9 +225,17 @@ def parse_submission(
     """Parse `view["state"]["values"]`; returns (inputs, {}) or (None, {block_id: message})."""
     errors: dict[str, str] = {}
 
-    stack = _selected(view_state, "stack")
-    if not stack:
-        errors["stack"] = "Select a stack."
+    catalog = _selected(view_state, "catalog")
+    if not catalog:
+        errors["catalog"] = "Select a catalog entry."
+
+    name = _text_value(view_state, "stack")
+    if not STACK_NAME_PATTERN.fullmatch(name):
+        errors["stack"] = (
+            "Use lowercase letters, numbers and hyphens only "
+            "(1-63 characters, no leading/trailing hyphen)."
+        )
+
     env = _selected(view_state, "env")
     if not env:
         errors["env"] = "Select an environment."
@@ -218,13 +253,13 @@ def parse_submission(
     for block_id in view_state:
         if not block_id.startswith(OVERRIDE_PREFIX):
             continue
-        name = block_id[len(OVERRIDE_PREFIX) :]
+        component_name = block_id[len(OVERRIDE_PREFIX) :]
         value = _text_value(view_state, block_id)
         if not value:
             errors[block_id] = "Version cannot be empty."
         else:
-            overrides[name] = value
+            overrides[component_name] = value
 
-    if errors or stack is None or env is None:
+    if errors or catalog is None or env is None:
         return None, errors
-    return DeployInputs(stack=stack, env=env, overrides=overrides, ttl=ttl), {}
+    return DeployInputs(catalog=catalog, stack=name, env=env, overrides=overrides, ttl=ttl), {}

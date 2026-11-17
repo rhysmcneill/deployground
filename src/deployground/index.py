@@ -46,6 +46,7 @@ class StackIndex:
                 # Env/owner/expiry/thread are uniform per stack: first component seen wins.
                 stack = stacks[record.stack] = StackRecord(
                     name=record.stack,
+                    catalog=record.catalog,
                     env=record.env,
                     owner=record.owner,
                     expires_at=record.expires_at,
