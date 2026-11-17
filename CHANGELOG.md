@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.8](https://github.com/rhysmcneill/deployground/compare/deployground-v0.6.7...deployground-v0.6.8) (2026-11-17)
+
+
+### Bug Fixes
+
+* **deployground-chart:** target the ApplicationSet's cluster by server URL or name ([#28](https://github.com/rhysmcneill/deployground/issues/28)) ([c9a525a](https://github.com/rhysmcneill/deployground/commit/c9a525a2e156f390affcaa275b8dc544ef4bd279))
+
 ## [0.6.7](https://github.com/rhysmcneill/deployground/compare/deployground-v0.6.6...deployground-v0.6.7) (2026-11-17)
 
 
