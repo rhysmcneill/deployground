@@ -2,6 +2,18 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: {{ .Release.Name }}-config
+  {{- if .Values.bootstrap.enabled }}
+  # Must itself be a PreSync hook, at or before the bootstrap Job's wave (job-bootstrap.yaml,
+  # wave "0"): a plain (non-hook) resource is only applied in the main Sync phase, which
+  # ArgoCD does not start until every PreSync hook has already succeeded — so the Job's init
+  # container would never find this ConfigMap to mount. Only needed when bootstrap.enabled,
+  # since that's the only case with a PreSync hook competing for it; the main Deployment
+  # (a plain Sync-phase resource either way) still finds it ready, since hooks always run
+  # before the Sync phase that creates the Deployment.
+  annotations:
+    argocd.argoproj.io/hook: PreSync
+    argocd.argoproj.io/sync-wave: "-1"
+  {{- end }}
   labels:
     app.kubernetes.io/name: deployground
     app.kubernetes.io/instance: {{ .Release.Name }}
