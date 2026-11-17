@@ -178,6 +178,9 @@ def test_bootstrap_applicationset_templates_labels_annotations_and_subscription(
         assert annotations[f"notifications.argoproj.io/subscribe.{trigger}.deployground"] == ""
 
     assert tmpl["spec"]["syncPolicy"]["automated"]["prune"] is True
+    assert tmpl["spec"]["syncPolicy"]["managedNamespaceMetadata"]["labels"] == {
+        "deployground.io/managed": "true"
+    }
     assert "resources-finalizer.argocd.argoproj.io" in tmpl["metadata"]["finalizers"]
 
     sources = tmpl["spec"]["sources"]

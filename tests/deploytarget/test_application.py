@@ -53,6 +53,9 @@ def test_application_cr_per_component_has_labels_metadata_and_subscription_annot
     assert "resources-finalizer.argocd.argoproj.io" in meta["finalizers"]
     spec = app["spec"]
     assert spec["syncPolicy"]["automated"]["prune"] is True
+    assert spec["syncPolicy"]["managedNamespaceMetadata"]["labels"] == {
+        "deployground.io/managed": "true"
+    }
     assert spec["destination"] == {"name": "dev-cluster", "namespace": "demo"}
     sources = spec["sources"]
     assert len(sources) == 1
