@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.10](https://github.com/rhysmcneill/deployground/compare/deployground-v0.6.9...deployground-v0.6.10) (2026-11-17)
+
+
+### Bug Fixes
+
+* **deploytarget:** drop the oci:// scheme from repoURL when chart is a separate field ([#32](https://github.com/rhysmcneill/deployground/issues/32)) ([2d1af8c](https://github.com/rhysmcneill/deployground/commit/2d1af8c850e1e22be53ba69b75bbf8b8648cc9b4))
+
 ## [0.6.9](https://github.com/rhysmcneill/deployground/compare/deployground-v0.6.8...deployground-v0.6.9) (2026-11-17)
 
 
