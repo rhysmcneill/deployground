@@ -10,7 +10,7 @@ from typing import Any
 
 import yaml
 
-from deployground.catalog import ResolvedComponent
+from deployground.catalog import ResolvedComponent, resolve_ingress_host
 from deployground.config.models import Config, DeployTargetCfg, RepoRef
 from deployground.deploytarget.notifications import notifications_cm, subscribe_annotations
 from deployground.deploytarget.workloadchart import chart_source
@@ -72,7 +72,7 @@ class ApplicationSetTarget:
                 data["port"] = comp.port
             data["replicas"] = comp.replicas
             if comp.ingressHost is not None:
-                data["ingressHost"] = comp.ingressHost
+                data["ingressHost"] = resolve_ingress_host(comp.ingressHost, stack)
             if comp.env:
                 data["env"] = dict(comp.env)
             if comp.secretRefs:
