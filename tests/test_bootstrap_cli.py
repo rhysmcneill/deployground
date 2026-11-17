@@ -51,6 +51,10 @@ def test_slack_manifest_has_required_settings():
     assert manifest["settings"]["socket_mode_enabled"] is True
     assert manifest["settings"]["interactivity"]["is_enabled"] is True
     assert manifest["features"]["app_home"]["home_tab_enabled"] is True
+    # The bot DMs the user (channel=<user id>) whenever a button click has no channel
+    # context -- every Home-tab-initiated action. Without this, those calls 400 with
+    # "messages_tab_disabled" and Home tab buttons appear to silently do nothing.
+    assert manifest["features"]["app_home"]["messages_tab_enabled"] is True
     assert "app_home_opened" in manifest["settings"]["event_subscriptions"]["bot_events"]
     shortcuts = manifest["features"]["shortcuts"]
     assert any(s["callback_id"] == "open_deploy_form" and s["type"] == "global" for s in shortcuts)
