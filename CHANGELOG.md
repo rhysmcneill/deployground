@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.0](https://github.com/rhysmcneill/deployground/compare/deployground-v0.4.0...deployground-v0.5.0) (2026-11-17)
+
+
+### Features
+
+* expose ingressClassName on Component ([#9](https://github.com/rhysmcneill/deployground/issues/9)) ([b78d54a](https://github.com/rhysmcneill/deployground/commit/b78d54a00b29d98802fc97212a17a91f2fc17a35))
+
 ## [0.4.0](https://github.com/rhysmcneill/deployground/compare/deployground-v0.3.0...deployground-v0.4.0) (2026-11-17)
 
 
