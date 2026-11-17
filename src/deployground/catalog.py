@@ -5,17 +5,16 @@ from collections.abc import Callable
 from deployground.config.models import Component, Config, StackDef
 
 
-def resolve_ingress_host(host: str | None, stack: str) -> str | None:
-    """Substitute a literal "{stack}" placeholder in a component's configured
-    ``ingressHost`` with the live deploy's own stack name.
+def resolve_ingress_host(host: str | None, ingress_class: str | None, stack: str) -> str | None:
+    """Resolve a component's effective ingress host for one live deploy.
 
-    A catalog stack is a reusable template; without this, every deploy of it would get
-    the exact same literal ingress host from config, colliding the moment a second
-    instance goes live. ``{stack}`` lets operators key the host off the name the deployer
-    picked instead -- e.g. ``"{stack}"`` alone for Tailscale's short MagicDNS label, or
-    ``"{stack}.apps.example.com"`` for a real DNS ingress.
+    Neither set: private, no Ingress. Only ingressClassName set: defaults to the bare
+    stack name (collision-free, e.g. Tailscale's short label). ingressHost set: used as
+    configured, with an optional {stack} placeholder for multi-deploy catalog stacks.
     """
-    return host.format(stack=stack) if host is not None else None
+    if host is None:
+        return stack if ingress_class is not None else None
+    return host.format(stack=stack)
 
 
 class UnknownStack(KeyError):

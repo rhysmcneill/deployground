@@ -83,8 +83,9 @@ class ApplicationTarget:
         if comp.port is not None:
             values["port"] = comp.port
         values["replicas"] = comp.replicas
-        if comp.ingressHost is not None:
-            values["ingressHost"] = resolve_ingress_host(comp.ingressHost, stack)
+        ingress_host = resolve_ingress_host(comp.ingressHost, comp.ingressClassName, stack)
+        if ingress_host is not None:
+            values["ingressHost"] = ingress_host
         if comp.env:
             values["env"] = dict(comp.env)
         if comp.secretRefs:

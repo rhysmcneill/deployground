@@ -117,13 +117,20 @@ def test_unknown_stack_raises():
 
 
 def test_resolve_ingress_host_substitutes_stack_placeholder():
-    assert resolve_ingress_host("{stack}", "pr-123") == "pr-123"
-    assert resolve_ingress_host("{stack}.apps.example.com", "pr-123") == "pr-123.apps.example.com"
+    assert resolve_ingress_host("{stack}", None, "pr-123") == "pr-123"
+    assert (
+        resolve_ingress_host("{stack}.apps.example.com", None, "pr-123")
+        == "pr-123.apps.example.com"
+    )
 
 
 def test_resolve_ingress_host_leaves_literal_host_unchanged():
-    assert resolve_ingress_host("fixed.example.com", "pr-123") == "fixed.example.com"
+    assert resolve_ingress_host("fixed.example.com", None, "pr-123") == "fixed.example.com"
 
 
-def test_resolve_ingress_host_passes_through_none():
-    assert resolve_ingress_host(None, "pr-123") is None
+def test_resolve_ingress_host_defaults_to_stack_name_when_only_ingress_class_is_set():
+    assert resolve_ingress_host(None, "tailscale", "pr-123") == "pr-123"
+
+
+def test_resolve_ingress_host_stays_private_with_neither_set():
+    assert resolve_ingress_host(None, None, "pr-123") is None
