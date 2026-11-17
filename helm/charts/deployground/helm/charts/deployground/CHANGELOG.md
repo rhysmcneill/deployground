@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.4](https://github.com/rhysmcneill/deployground/compare/deployground-chart-v0.5.3...deployground-chart-v0.5.4) (2026-11-17)
+
+
+### Bug Fixes
+
+* appset repo URL + config validation errors from service-link env vars ([#19](https://github.com/rhysmcneill/deployground/issues/19)) ([3e9523a](https://github.com/rhysmcneill/deployground/commit/3e9523a660479913e49f05ceea4d35031fc24fcd))
+
 ## [0.5.3](https://github.com/rhysmcneill/deployground/compare/deployground-chart-v0.5.2...deployground-chart-v0.5.3) (2026-11-17)
 
 
