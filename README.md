@@ -31,11 +31,11 @@ operate this.
 ## How it works
 
 ```
-Slack form → authz check → render component files → one Git PR
-                                                         │
-                                          ArgoCD syncs ──┘
-                                                         │
-          Slack thread updates live  ←  status (push or poll)
+Slack/MS Teams etc form → authz check → render component files → one Git PR
+                                                                   │
+                                                    ArgoCD syncs ──┘
+                                                                   │
+                    Slack thread updates live  ←  status (push or poll)
 ```
 
 1. **Pick a stack** from a Slack dropdown — one service, or many deployed together as a unit.
