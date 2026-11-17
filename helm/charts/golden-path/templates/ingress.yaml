@@ -20,5 +20,8 @@ spec:
               service:
                 name: {{ .Release.Name }}
                 port:
-                  name: http
+                  # Numeric, not the "http" port name: this cluster's Tailscale ingress
+                  # operator doesn't resolve a named port against the Service and reports
+                  # "no valid backends" instead.
+                  number: {{ .Values.port }}
 {{- end }}
