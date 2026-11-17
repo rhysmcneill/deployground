@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.0](https://github.com/rhysmcneill/deployground/compare/deployground-chart-v0.4.0...deployground-chart-v0.5.0) (2026-11-17)
+
+
+### Features
+
+* **deployground-chart:** auto-apply the ApplicationSet only, never notifications-cm ([#11](https://github.com/rhysmcneill/deployground/issues/11)) ([2de1fca](https://github.com/rhysmcneill/deployground/commit/2de1fca2d95e6ba925635952fef1fe38816fc559))
+
 ## [0.4.0](https://github.com/rhysmcneill/deployground/compare/deployground-chart-v0.3.0...deployground-chart-v0.4.0) (2026-11-17)
 
 
