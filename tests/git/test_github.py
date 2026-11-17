@@ -2,7 +2,7 @@ import base64
 from types import SimpleNamespace as NS
 
 import pytest
-from fastcore.net import HTTP404NotFoundError
+from fasttransport.errors import APIError
 
 from deployground.config.models import RepoRef, TokenRef
 from deployground.git.base import FileChange
@@ -29,7 +29,7 @@ class FakeApi:
         def get_content(**kw):
             outer.calls.append(("get_content", kw))
             if kw["path"] not in outer.files:
-                raise HTTP404NotFoundError("http://x", {}, None)
+                raise APIError("Not Found", status_code=404)
             return NS(sha=f"sha-{kw['path']}")
 
         tree = [NS(path=p, type="blob", sha=f"sha-{p}") for p in self.files]
@@ -140,6 +140,13 @@ def test_api_constructs_ghapi_in_sync_mode(monkeypatch):
     monkeypatch.setattr("deployground.git.github.GhApi", fake_ghapi)
     GitHubClient(env={"GH_TOKEN": "t"})._api(REPO)
     assert captured["sync"] is True
+
+
+def test_existing_sha_reraises_non_404_errors():
+    api = FakeApi({"a.yaml": "old"})
+    api.repos.get_content = lambda **kw: (_ for _ in ()).throw(APIError("boom", status_code=500))
+    with pytest.raises(APIError, match="boom"):
+        client_with(api).open_pr(REPO, "b", "t", [FileChange(REPO, "a.yaml", "new")], False)
 
 
 def test_branch_name_is_slugged_and_prefixed():

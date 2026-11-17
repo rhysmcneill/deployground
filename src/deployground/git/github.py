@@ -12,7 +12,7 @@ import secrets
 from collections.abc import Mapping
 from typing import Any
 
-from fastcore.net import HTTP404NotFoundError
+from fasttransport.errors import APIError
 from ghapi.all import GhApi
 
 from deployground.config.models import RepoRef
@@ -109,5 +109,7 @@ class GitHubClient:
     def _existing_sha(api: Any, path: str, ref: str) -> str | None:
         try:
             return api.repos.get_content(path=path, ref=ref).sha
-        except HTTP404NotFoundError:
-            return None
+        except APIError as exc:
+            if exc.status_code == 404:
+                return None
+            raise
