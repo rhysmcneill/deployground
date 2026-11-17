@@ -1,6 +1,6 @@
 import pytest
 
-from deployground.catalog import Catalog, UnknownComponent, UnknownStack
+from deployground.catalog import Catalog, UnknownComponent, UnknownStack, resolve_ingress_host
 from deployground.config.models import Config
 
 BASE = {
@@ -114,3 +114,23 @@ def test_unknown_component_override_raises():
 def test_unknown_stack_raises():
     with pytest.raises(UnknownStack, match="missing"):
         make_catalog().get("missing")
+
+
+def test_resolve_ingress_host_substitutes_stack_placeholder():
+    assert resolve_ingress_host("{stack}", None, "pr-123") == "pr-123"
+    assert (
+        resolve_ingress_host("{stack}.apps.example.com", None, "pr-123")
+        == "pr-123.apps.example.com"
+    )
+
+
+def test_resolve_ingress_host_leaves_literal_host_unchanged():
+    assert resolve_ingress_host("fixed.example.com", None, "pr-123") == "fixed.example.com"
+
+
+def test_resolve_ingress_host_defaults_to_stack_name_when_only_ingress_class_is_set():
+    assert resolve_ingress_host(None, "tailscale", "pr-123") == "pr-123"
+
+
+def test_resolve_ingress_host_stays_private_with_neither_set():
+    assert resolve_ingress_host(None, None, "pr-123") is None

@@ -130,6 +130,16 @@ def test_file_contains_workload_and_deployground_block():
         assert key not in web
 
 
+def test_files_defaults_ingress_host_to_stack_when_only_class_is_set():
+    comp = resolved("api").model_copy(update={"ingressHost": None, "ingressClassName": "nginx"})
+    changes = ApplicationSetTarget(CFG, REPO).files_for(
+        "demo", "dev", {"api": comp}, {"api": record("api")}
+    )
+    data = yaml.safe_load(changes[0].content)
+    assert data["ingressHost"] == "demo"
+    assert data["ingressClassName"] == "nginx"
+
+
 def test_delete_files_targets_all_components():
     changes = ApplicationSetTarget(CFG, REPO).delete_files_for("demo", "dev", NAMES)
     assert sorted(c.path for c in changes) == [f"dev/demo/{n}/config.yaml" for n in NAMES]

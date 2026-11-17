@@ -77,6 +77,17 @@ def test_application_cr_per_component_has_labels_metadata_and_subscription_annot
     assert web_values == {"image": "ghcr.io/org/web:1.2.3", "replicas": 2}
 
 
+def test_application_defaults_ingress_host_to_stack_when_only_class_is_set():
+    comp = resolved("api").model_copy(update={"ingressHost": None, "ingressClassName": "nginx"})
+    changes = ApplicationTarget(CFG, REPO, CLUSTERS).files_for(
+        "demo", "dev", {"api": comp}, {"api": record("api")}
+    )
+    app = yaml.safe_load(changes[0].content)
+    values = yaml.safe_load(app["spec"]["sources"][0]["helm"]["values"])
+    assert values["ingressHost"] == "demo"
+    assert values["ingressClassName"] == "nginx"
+
+
 def test_application_chart_source_uses_git_override():
     cfg = DeployTargetCfg(
         type="application",
