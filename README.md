@@ -5,11 +5,16 @@
 [![CI](https://github.com/rhysmcneill/deployground/actions/workflows/ci.yml/badge.svg)](https://github.com/rhysmcneill/deployground/actions/workflows/ci.yml)
 [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
-Deployground is a Slack app that lets anyone on your team deploy a service, or a whole stack of
-services, straight from Slack — no `kubectl`, no YAML, no waiting on a platform team. Pick a
-stack, pick versions, hit submit. A PR opens, GitOps takes it from there, and you watch it go
-live in the same Slack thread. Every deploy is owned, time-boxed, and torn down automatically
-when it expires.
+Deployground lets anyone on your team deploy a service, or a whole stack of services, straight
+from the chat tool they're already sitting in — no `kubectl`, no YAML, no waiting on a platform
+team. Pick a stack, pick versions, hit submit. A PR opens, GitOps takes it from there, and you
+watch it go live in the same thread. Every deploy is owned, time-boxed, and torn down
+automatically when it expires.
+
+**Slack is the first integration, not the only one planned.** The GitOps writer, lifecycle, and
+access guardrails don't know or care which chat tool triggered them — Slack is just what Step 1
+built the front end in. Teaching Deployground a second chat platform (Microsoft Teams, say) is
+on the roadmap as that front end's natural next step, not a rewrite of the core underneath it.
 
 It's a thin front end over **Git and ArgoCD** — the bot never touches your cluster directly, and
 nothing it needs is installed out-of-band beyond one bootstrapped ApplicationSet. No database:
@@ -83,24 +88,27 @@ few lines of config — an image, a port, a default version.
 
 ## Built to grow
 
-Deployground's core — the Slack form engine, GitOps writer, lifecycle (TTL/warn/reap), and
-access guardrails — doesn't change as new things get added on top of it. Everything that varies
-sits behind a small set of interfaces, each swappable without touching the rest:
+Deployground's core — the GitOps writer, lifecycle (TTL/warn/reap), and access guardrails —
+doesn't change as new things get added on top of it; none of it has ever imported anything
+Slack-specific. Everything that varies sits behind a seam. Three are real protocols today —
+deploy targets and status sources each already have two implementations, capabilities its
+first (`image-deploy`) — and one, the chat layer, is still a stated direction rather than code:
 
+- **The chat layer** — Slack today, directly (there's no platform abstraction yet; that's the
+  honest state of Step 1). Adding Microsoft Teams or another tool means extracting that
+  interface and giving it a second implementation, not touching the GitOps writer, lifecycle,
+  or access guardrails underneath — none of those know Slack exists.
 - **Capabilities** — what gets deployed. Today there's one: `image-deploy`, for pre-built
   container images. The design leaves room for a `repo` capability (build from source, with
   per-PR preview environments) and an `infra` capability (Terraform/Terramate stacks via CI,
-  plan → approve → apply) — each reusing the same form engine, lifecycle, and Slack UX a new
-  capability gets for free.
+  plan → approve → apply) — each reusing the same form engine, lifecycle, and chat-layer UX a
+  new capability gets for free.
 - **Deploy targets** — how a render becomes a running workload: a bootstrapped ArgoCD
   `ApplicationSet` by default, or a native `Application` CR for operators who restrict
   ApplicationSets. Flux and raw-manifest targets fit the same seam.
-- **Status sources** — how progress gets back to Slack: ArgoCD Notifications (push) or the
-  ArgoCD API (poll) today; any event-driven source (a CI pipeline, EventBridge) fits the same
-  shape.
-- **The chat layer itself** sits behind an interface, too. Slack is the only one built today, but
-  nothing in the core assumes it — another chat platform (Microsoft Teams, for example) is a
-  second implementation of the same seam, not a rewrite.
+- **Status sources** — how progress gets back to the chat thread: ArgoCD Notifications (push) or
+  the ArgoCD API (poll) today; any event-driven source (a CI pipeline, EventBridge) fits the
+  same shape.
 
 ## Project layout
 
