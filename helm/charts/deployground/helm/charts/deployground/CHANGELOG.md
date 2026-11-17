@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.3](https://github.com/rhysmcneill/deployground/compare/deployground-chart-v0.5.2...deployground-chart-v0.5.3) (2026-11-17)
+
+
+### Bug Fixes
+
+* **deployground-chart:** switch bootstrap kubectl image off bitnami ([#17](https://github.com/rhysmcneill/deployground/issues/17)) ([298852e](https://github.com/rhysmcneill/deployground/commit/298852e891bce4c819bcd4eb5702e9644b71d6ea))
+
 ## [0.5.2](https://github.com/rhysmcneill/deployground/compare/deployground-chart-v0.5.1...deployground-chart-v0.5.2) (2026-11-17)
 
 
