@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "deployground"
-version = "0.8.2"
+version = "0.9.0"
 description = "Self-service deploys for apps and infra, from the tools your team already uses."
 readme = "README.md"
 license = "Apache-2.0"

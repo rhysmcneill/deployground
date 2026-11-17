@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.0](https://github.com/rhysmcneill/deployground/compare/deployground-chart-v0.6.0...deployground-chart-v0.7.0) (2026-11-17)
+
+
+### Features
+
+* **slack:** scrap the shared channel, DM the user directly ([#47](https://github.com/rhysmcneill/deployground/issues/47)) ([714ba68](https://github.com/rhysmcneill/deployground/commit/714ba6862e0c0dd904c1bdb335957809a84e9eaa))
+
 ## [0.6.0](https://github.com/rhysmcneill/deployground/compare/deployground-chart-v0.5.5...deployground-chart-v0.6.0) (2026-11-17)
 
 
