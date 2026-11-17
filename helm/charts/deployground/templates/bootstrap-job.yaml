@@ -1,0 +1,65 @@
+{{- if .Values.bootstrap.enabled }}
+# Runs `deployground bootstrap --only applicationset` and applies its output on every ArgoCD
+# sync of this Application, so the ApplicationSet(s) stay in sync with this release's config
+# without a human running the command by hand. PreSync: the bot's own Deployment only
+# (re)starts after this succeeds. BeforeHookCreation: ArgoCD replaces the previous completed
+# Job rather than accumulating one per sync.
+#
+# --only applicationset is NOT optional here: argocd-notifications-cm is typically already
+# owned by however ArgoCD itself is installed (e.g. the argo-cd Helm chart's own
+# `notifications:` values) — auto-applying it would get silently reverted on that install's
+# next upgrade. It must be merged into that install's own config by hand, once; see
+# docs/quickstart.md. The ApplicationSet has no such owner (it's uniquely deployground's own
+# resource), so it's the only thing safe to automate.
+#
+# No human reviews the ApplicationSet before this applies it — that review happened once, by
+# hand, before bootstrap.enabled was turned on (see the comment on that value).
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ .Release.Name }}-bootstrap
+  annotations:
+    argocd.argoproj.io/hook: PreSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+  labels:
+    app.kubernetes.io/name: deployground
+    app.kubernetes.io/instance: {{ .Release.Name }}
+spec:
+  backoffLimit: 2
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: deployground
+        app.kubernetes.io/instance: {{ .Release.Name }}
+    spec:
+      serviceAccountName: {{ .Release.Name }}-bootstrap
+      restartPolicy: Never
+      volumes:
+        - name: config
+          configMap:
+            name: {{ .Release.Name }}-config
+        - name: manifests
+          emptyDir: {}
+      initContainers:
+        - name: render
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command:
+            - sh
+            - -c
+            - deployground bootstrap --config /etc/deployground/config.yaml --only applicationset > /manifests/bootstrap.yaml
+          volumeMounts:
+            - name: config
+              mountPath: /etc/deployground
+              readOnly: true
+            - name: manifests
+              mountPath: /manifests
+      containers:
+        - name: apply
+          image: "{{ .Values.bootstrap.kubectlImage }}"
+          command: ["kubectl", "apply", "-f", "/manifests/bootstrap.yaml"]
+          volumeMounts:
+            - name: manifests
+              mountPath: /manifests
+              readOnly: true
+{{- end }}

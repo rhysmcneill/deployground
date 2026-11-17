@@ -50,6 +50,21 @@ resources:
   requests: { cpu: 50m, memory: 128Mi }
   limits: { memory: 256Mi }
 
+# Automatically applies the generated ApplicationSet(s) ONLY on every sync, via a dedicated
+# PreSync hook Job whose own narrowly-scoped ServiceAccount can only create/update
+# ApplicationSets in argocdNamespace below. The bot's OWN pod is never granted this — it
+# still only ever opens PRs. argocd-notifications-cm is deliberately NEVER auto-applied: it's
+# typically already owned by however ArgoCD itself is installed (e.g. the argo-cd Helm
+# chart's own `notifications:` values), and auto-applying it would get silently reverted on
+# that install's next upgrade — merge it into that install's own config by hand, once; see
+# docs/quickstart.md. Off by default: review the printed ApplicationSet by hand at least once
+# (`deployground bootstrap --config ...`) before turning this on, since enabling it means no
+# human reviews it before each apply.
+bootstrap:
+  enabled: false
+  argocdNamespace: argocd
+  kubectlImage: "bitnami/kubectl:1.31.3"
+
 podAnnotations: {}
 nodeSelector: {}
 tolerations: []
