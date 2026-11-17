@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.7](https://github.com/rhysmcneill/deployground/compare/deployground-v0.6.6...deployground-v0.6.7) (2026-11-17)
+
+
+### Bug Fixes
+
+* **git:** catch the right 404 exception type from ghapi ([#26](https://github.com/rhysmcneill/deployground/issues/26)) ([92aab04](https://github.com/rhysmcneill/deployground/commit/92aab04af2cd260dc2a8e3a0fb634a971d63297d))
+
 ## [0.6.6](https://github.com/rhysmcneill/deployground/compare/deployground-v0.6.5...deployground-v0.6.6) (2026-11-17)
 
 
