@@ -234,3 +234,15 @@ def test_bootstrap_one_applicationset_per_env_with_its_cluster():
     assert dev["spec"]["template"]["spec"]["destination"]["name"] == "dev-cluster"
     assert prod["spec"]["template"]["spec"]["destination"]["name"] == "prod-eks"
     assert prod["spec"]["generators"][0]["git"]["files"] == [{"path": "prod/*/*/config.yaml"}]
+
+
+def test_bootstrap_applicationset_targets_cluster_by_server_when_cluster_is_a_url():
+    # The common zero-setup case: no Argo CD Cluster registration needed for the local
+    # cluster, unlike a registered cluster *name* (the other branch, above).
+    cfg = make_config()
+    cfg.environments["dev"].cluster = "https://kubernetes.default.svc"
+    manifests = ApplicationSetTarget(CFG, REPO).bootstrap_manifests(cfg)
+    dev = yaml.safe_load(manifests["applicationset-dev.yaml"])
+    destination = dev["spec"]["template"]["spec"]["destination"]
+    assert destination["server"] == "https://kubernetes.default.svc"
+    assert "name" not in destination

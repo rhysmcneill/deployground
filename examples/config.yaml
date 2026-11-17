@@ -32,7 +32,12 @@ deployTarget:
 
 environments:
   homelab:
-    cluster: homelab # the cluster name as registered in Argo CD
+    # Either a server URL (targets that cluster directly; use
+    # https://kubernetes.default.svc for the cluster Argo CD itself runs in -- no Argo CD
+    # Cluster registration needed, so most single-cluster setups just use this) or a
+    # cluster *name* as registered in Argo CD (for teams managing several clusters from
+    # one Argo CD).
+    cluster: https://kubernetes.default.svc
     repo: gitops-nonprod
     autoMerge: true
     ttl: { default: 24h, max: 168h }
@@ -48,14 +53,14 @@ stacks:
   api:
     components:
       api: { image: ghcr.io/my-org/api, defaultVersion: v1.2.3, port: 8080 }
-  pool-party:
+  my-etire-stack:
     components:
       api: { image: ghcr.io/my-org/api, defaultVersion: v1.2.3, port: 8080 }
       web:
         image: ghcr.io/my-org/web
         defaultVersion: v4.5.6
         port: 3000
-        ingressHost: pool-party.home.example.com
+        ingressHost: my-etire-stack.home.example.com
         # Optional: names of pre-existing dockerconfigjson Secrets (e.g. `kubectl create
         # secret docker-registry ...`) so kubelet can pull this image from a private
         # registry (Harbor, private ECR, private ghcr, etc.):
