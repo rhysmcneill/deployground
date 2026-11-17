@@ -87,11 +87,21 @@ def make_service(authz=None, index=None, config=None, max_live=10):
     return svc, git, cap, index
 
 
-def deploy(svc, user="U1", env="dev", ttl=None, email="a@example.com", overrides=None):
+def deploy(
+    svc,
+    user="U1",
+    env="dev",
+    ttl=None,
+    email="a@example.com",
+    overrides=None,
+    catalog="demo",
+    stack="demo",
+):
     return svc.deploy(
         user=user,
         owner_email=email,
-        stack="demo",
+        catalog=catalog,
+        stack=stack,
         env=env,
         overrides=overrides or {},
         ttl=ttl,
@@ -122,6 +132,18 @@ def test_deploy_opens_single_pr_and_upserts_index():
         "web": "2.0.0",
     }
     assert record.components["api"].owner == "U1"
+
+
+def test_deploy_resolves_versions_from_catalog_not_stack_name():
+    svc, git, _, index = make_service()
+    deploy(svc, catalog="demo", stack="pr-123")
+    assert len(git.prs) == 1
+    record = index.records["pr-123"]
+    assert record.catalog == "demo"
+    assert {n: c.version for n, c in record.components.items()} == {
+        "api": "1.0.0",
+        "web": "2.0.0",
+    }
 
 
 def test_deploy_takes_owner_from_payload_not_store():
@@ -157,7 +179,7 @@ def test_max_live_per_user_enforced_from_index():
 
 
 def test_destroy_requires_manage_permission():
-    record = StackRecord("demo", "dev", "U1", NOW, "1.1", "C1")
+    record = StackRecord("demo", "demo", "dev", "U1", NOW, "1.1", "C1")
     svc, git, _, index = make_service(authz=FakeAuthz(manage=False))
     index.records["demo"] = record
     with pytest.raises(Denied):
@@ -173,10 +195,10 @@ def test_destroy_requires_manage_permission():
 
 def test_extend_updates_expiry_in_all_component_files():
     comps = {
-        n: ComponentRecord("demo", n, "U1", "a@example.com", "dev", NOW, v, "1.1", "C1")
+        n: ComponentRecord("demo", "demo", n, "U1", "a@example.com", "dev", NOW, v, "1.1", "C1")
         for n, v in (("api", "1.0.0"), ("web", "2.0.0"))
     }
-    record = StackRecord("demo", "dev", "U1", NOW, "1.1", "C1", comps)
+    record = StackRecord("demo", "demo", "dev", "U1", NOW, "1.1", "C1", comps)
     svc, git, _, index = make_service()
     index.records["demo"] = record
     svc.extend("U1", "demo", "6h")
@@ -198,10 +220,10 @@ def test_extend_tolerates_a_component_dropped_from_the_catalog():
     # no longer define it (e.g. a component renamed). It must not block extending the
     # component(s) that are still cataloged.
     comps = {
-        n: ComponentRecord("demo", n, "U1", "a@example.com", "dev", NOW, v, "1.1", "C1")
+        n: ComponentRecord("demo", "demo", n, "U1", "a@example.com", "dev", NOW, v, "1.1", "C1")
         for n, v in (("api", "1.0.0"), ("legacy", "9.9.9"))
     }
-    record = StackRecord("demo", "dev", "U1", NOW, "1.1", "C1", comps)
+    record = StackRecord("demo", "demo", "dev", "U1", NOW, "1.1", "C1", comps)
     svc, git, _, index = make_service()
     index.records["demo"] = record
     svc.extend("U1", "demo", "6h")
@@ -213,8 +235,29 @@ def test_extend_tolerates_a_component_dropped_from_the_catalog():
     assert updated.components["legacy"].version == "9.9.9"
 
 
+def test_extend_tolerates_the_whole_catalog_entry_being_gone():
+    # The catalog entry "deleted-entry" the stack was deployed from no longer exists at
+    # all (not just one dropped component). Nothing can be regenerated, so no PR is
+    # opened, but the stack's expiry must still move out in the index.
+    comps = {
+        "api": ComponentRecord(
+            "demo", "deleted-entry", "api", "U1", "a@example.com", "dev", NOW, "1.0.0", "1.1", "C1"
+        ),
+    }
+    record = StackRecord("demo", "deleted-entry", "dev", "U1", NOW, "1.1", "C1", comps)
+    svc, git, _, index = make_service()
+    index.records["demo"] = record
+    svc.extend("U1", "demo", "6h")
+    assert git.prs == []
+    new_expiry = NOW + timedelta(hours=6)
+    updated = index.records["demo"]
+    assert updated.expires_at == new_expiry
+    assert updated.components["api"].expires_at == new_expiry
+    assert updated.components["api"].version == "1.0.0"
+
+
 def test_extend_without_expiry_denied():
-    record = StackRecord("demo", "dev", "U1", None, "1.1", "C1")
+    record = StackRecord("demo", "demo", "dev", "U1", None, "1.1", "C1")
     svc, git, _, index = make_service()
     index.records["demo"] = record
     with pytest.raises(Denied, match="no expiry"):
@@ -223,7 +266,7 @@ def test_extend_without_expiry_denied():
 
 
 def _existing(env="dev", owner="U1"):
-    return StackRecord("demo", env, owner, NOW, "1.1", "C1")
+    return StackRecord("demo", "demo", env, owner, NOW, "1.1", "C1")
 
 
 def test_deploy_over_existing_stack_of_other_owner_denied():
@@ -319,5 +362,5 @@ def test_destroy_returns_pr_state():
     from deployground.lifecycle.service import DestroyResult
 
     svc, _, _, index = make_service()
-    index.records["demo"] = StackRecord("demo", "dev", "U1", NOW, "1.1", "C1")
+    index.records["demo"] = StackRecord("demo", "demo", "dev", "U1", NOW, "1.1", "C1")
     assert svc.destroy("U1", "demo") == DestroyResult("https://pr/1", 1, True)
