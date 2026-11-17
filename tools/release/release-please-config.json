@@ -16,11 +16,25 @@
     { "type": "ci", "section": "Continuous Integration", "hidden": true },
     { "type": "infra", "section": "Infrastructure", "hidden": true }
   ],
+  "plugins": [
+    {
+      "type": "linked-versions",
+      "groupName": "deployground",
+      "components": ["deployground", "golden-path"]
+    }
+  ],
   "packages": {
     ".": {
       "package-name": "deployground",
+      "component": "deployground",
       "changelog-path": "CHANGELOG.md",
       "extra-files": ["src/deployground/__init__.py"]
+    },
+    "charts/golden-path": {
+      "release-type": "helm",
+      "package-name": "golden-path",
+      "component": "golden-path",
+      "changelog-path": "charts/golden-path/CHANGELOG.md"
     }
   }
 }

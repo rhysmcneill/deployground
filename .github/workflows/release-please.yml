@@ -83,3 +83,46 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           provenance: true
           sbom: true
+
+  publish-chart:
+    name: Publish golden-path chart
+    needs: release-please
+    if: |
+      github.repository == 'rhysmcneill/deployground' && (
+        github.event_name == 'workflow_dispatch' ||
+        (needs.release-please.outputs.release_created == 'true' && needs.release-please.outputs.tag_name != '')
+      )
+    permissions:
+      contents: read
+      packages: write
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.tag_name || needs.release-please.outputs.tag_name }}
+
+      - name: Derive chart version from release tag
+        id: version
+        env:
+          TAG: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.tag_name || needs.release-please.outputs.tag_name }}
+        run: |
+          test -n "$TAG"
+          echo "VERSION=${TAG#v}" >> $GITHUB_OUTPUT
+
+      - name: Verify helm is available
+        run: helm version
+
+      - name: Package golden-path chart
+        run: |
+          helm package charts/golden-path \
+            --version "${{ steps.version.outputs.VERSION }}" \
+            --app-version "${{ steps.version.outputs.VERSION }}" \
+            --destination .
+
+      - name: Log in to ghcr.io (Helm OCI)
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | helm registry login ghcr.io \
+            --username "${{ github.actor }}" --password-stdin
+
+      - name: Push chart to ghcr.io
+        run: helm push "golden-path-${{ steps.version.outputs.VERSION }}.tgz" oci://ghcr.io/rhysmcneill
