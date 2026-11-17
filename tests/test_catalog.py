@@ -82,6 +82,14 @@ def test_resolve_versions_preserves_image_pull_secrets_and_service_account():
     assert resolved["api"].serviceAccountName == "my-irsa-sa"
 
 
+def test_resolve_versions_preserves_ingress_class_name():
+    cfg = Config.model_validate(BASE)
+    cfg.stacks["api"].components["api"].ingressClassName = "tailscale"
+    catalog = Catalog(lambda: cfg)
+    resolved = catalog.resolve_versions("api", {})
+    assert resolved["api"].ingressClassName == "tailscale"
+
+
 def test_resolve_uses_default_when_no_override():
     resolved = make_catalog().resolve_versions("shop", {})
     assert {name: r.version for name, r in resolved.items()} == {

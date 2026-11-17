@@ -80,6 +80,10 @@ class Component(_Model):
     # NOT help pull private images: kubelet pulls the image before the pod (and its
     # ServiceAccount) exists, so this is a pod-runtime mechanism only, not a pull mechanism.
     serviceAccountName: str | None = None
+    # Ingress class for the component's Ingress (e.g. "tailscale", "nginx"); None uses the
+    # cluster's default IngressClass. Purely a routing choice — unrelated to the two fields
+    # above.
+    ingressClassName: str | None = None
 
 
 class StackDef(_Model):

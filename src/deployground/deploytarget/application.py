@@ -93,6 +93,8 @@ class ApplicationTarget:
             values["imagePullSecrets"] = list(comp.imagePullSecrets)
         if comp.serviceAccountName:
             values["serviceAccountName"] = comp.serviceAccountName
+        if comp.ingressClassName:
+            values["ingressClassName"] = comp.ingressClassName
         # Literal manifest (no Go-template vars): the chart source is resolved once here
         # from config, same defaulting as the ApplicationSet target. Values are already
         # known in full, so they stay inline on the chart source's `helm.values` rather

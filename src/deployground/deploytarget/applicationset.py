@@ -77,6 +77,8 @@ class ApplicationSetTarget:
                 data["imagePullSecrets"] = list(comp.imagePullSecrets)
             if comp.serviceAccountName:
                 data["serviceAccountName"] = comp.serviceAccountName
+            if comp.ingressClassName:
+                data["ingressClassName"] = comp.ingressClassName
             data[BLOCK_KEY] = to_metadata_block(records[name])
             changes.append(
                 FileChange(

@@ -83,6 +83,20 @@ def test_component_image_pull_secrets_and_service_account_round_trip():
     assert comp.serviceAccountName == "my-irsa-sa"
 
 
+def test_component_ingress_class_name_default_empty():
+    cfg = Config.model_validate(VALID)
+    comp = cfg.stacks["api"].components["api"]
+    assert comp.ingressClassName is None
+
+
+def test_component_ingress_class_name_round_trip():
+    data = make()
+    data["stacks"]["api"]["components"]["api"]["ingressClassName"] = "tailscale"
+    cfg = Config.model_validate(data)
+    comp = cfg.stacks["api"].components["api"]
+    assert comp.ingressClassName == "tailscale"
+
+
 def test_rule_requires_exactly_one_principal():
     with pytest.raises(ValidationError):
         Config.model_validate(make(access={"rules": [{"user": "U1", "group": "S1"}]}))
