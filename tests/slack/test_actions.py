@@ -291,7 +291,13 @@ def test_prefilled_button_opens_modal_with_values():
     deps, _ = make_deps()
     client, ack = FakeClient(), Ack()
     value = json.dumps(
-        {"catalog": "shop", "stack": "shop", "env": "staging", "overrides": {"web": "v9"}, "ttl": "2h"}
+        {
+            "catalog": "shop",
+            "stack": "shop",
+            "env": "staging",
+            "overrides": {"web": "v9"},
+            "ttl": "2h",
+        }
     )
     body = {
         "user": {"id": "U1"},

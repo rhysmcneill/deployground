@@ -83,9 +83,7 @@ def _text(value):
 def state(catalog="shop", env="dev", ttl="24h", overrides=None, name="pr-123"):
     s = {}
     if catalog is not None:
-        s["catalog"] = {
-            ACTION_ID: {"type": "static_select", "selected_option": {"value": catalog}}
-        }
+        s["catalog"] = {ACTION_ID: {"type": "static_select", "selected_option": {"value": catalog}}}
     if env is not None:
         s["env"] = {ACTION_ID: {"type": "static_select", "selected_option": {"value": env}}}
     s["ttl"] = _text(ttl)
@@ -119,7 +117,9 @@ def test_stack_name_is_a_plain_text_input_with_hint():
 
 
 def test_override_picker_and_blocks_sit_between_catalog_and_stack_name():
-    prefill = DeployInputs(catalog="shop", stack="pr-123", env="dev", overrides={"web": "v9"}, ttl="2h")
+    prefill = DeployInputs(
+        catalog="shop", stack="pr-123", env="dev", overrides={"web": "v9"}, ttl="2h"
+    )
     view = build_deploy_modal("U1", catalog(), FakeAuthz({"dev"}), prefill)
     block_ids = [b.get("block_id") for b in view["blocks"] if b.get("block_id")]
     assert block_ids == ["catalog", "override_components", "override::web", "stack", "env", "ttl"]
@@ -139,7 +139,9 @@ def test_expires_in_defaults_to_24h():
 
 
 def test_prefill_populates_fields():
-    prefill = DeployInputs(catalog="shop", stack="pr-123", env="prod", overrides={"web": "v9"}, ttl="2h")
+    prefill = DeployInputs(
+        catalog="shop", stack="pr-123", env="prod", overrides={"web": "v9"}, ttl="2h"
+    )
     view = build_deploy_modal("U1", catalog(), FakeAuthz({"dev", "prod"}), prefill)
     assert block(view, "catalog")["element"]["initial_option"]["value"] == "shop"
     assert block(view, "stack")["element"]["initial_value"] == "pr-123"
@@ -195,7 +197,9 @@ def test_empty_envs_view_has_no_inputs_and_no_submit():
 
 
 def test_catalog_and_override_picker_dispatch_actions():
-    prefill = DeployInputs(catalog="shop", stack="pr-123", env="dev", overrides={"web": "v9"}, ttl="2h")
+    prefill = DeployInputs(
+        catalog="shop", stack="pr-123", env="dev", overrides={"web": "v9"}, ttl="2h"
+    )
     view = build_deploy_modal("U1", catalog(), FakeAuthz({"dev"}), prefill)
     assert block(view, "catalog")["dispatch_action"] is True
     assert block(view, "override_components")["dispatch_action"] is True

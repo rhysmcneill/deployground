@@ -237,8 +237,9 @@ def test_extend_tolerates_a_component_dropped_from_the_catalog():
 
 def test_extend_tolerates_the_whole_catalog_entry_being_gone():
     # The catalog entry "deleted-entry" the stack was deployed from no longer exists at
-    # all (not just one dropped component). Nothing can be regenerated, so no PR is
-    # opened, but the stack's expiry must still move out in the index.
+    # all (not just one dropped component). Nothing can be regenerated at all, so this
+    # extend can't be made durable (StackIndex.rebuild() re-derives from git, and would
+    # lose it) -- it must be denied outright, not silently "succeed" in memory only.
     comps = {
         "api": ComponentRecord(
             "demo", "deleted-entry", "api", "U1", "a@example.com", "dev", NOW, "1.0.0", "1.1", "C1"
@@ -247,13 +248,30 @@ def test_extend_tolerates_the_whole_catalog_entry_being_gone():
     record = StackRecord("demo", "deleted-entry", "dev", "U1", NOW, "1.1", "C1", comps)
     svc, git, _, index = make_service()
     index.records["demo"] = record
-    svc.extend("U1", "demo", "6h")
+    with pytest.raises(Denied, match="deleted-entry.*no longer exists"):
+        svc.extend("U1", "demo", "6h")
     assert git.prs == []
-    new_expiry = NOW + timedelta(hours=6)
-    updated = index.records["demo"]
-    assert updated.expires_at == new_expiry
-    assert updated.components["api"].expires_at == new_expiry
-    assert updated.components["api"].version == "1.0.0"
+    assert index.records["demo"] is record  # not mutated
+
+
+def test_extend_resolves_versions_from_record_catalog_not_stack_name():
+    # The stack is named "pr-123" but was deployed from the "demo" catalog entry. extend()
+    # must resolve versions using record.catalog ("demo") while writing file paths under
+    # the stack name ("pr-123") -- proving the two are used independently.
+    comps = {
+        "api": ComponentRecord(
+            "pr-123", "demo", "api", "U1", "a@example.com", "dev", NOW, "1.0.0", "1.1", "C1"
+        ),
+    }
+    record = StackRecord("pr-123", "demo", "dev", "U1", NOW, "1.1", "C1", comps)
+    svc, git, _, index = make_service()
+    index.records["pr-123"] = record
+    svc.extend("U1", "pr-123", "6h")
+    assert len(git.prs) == 1
+    changes = git.prs[0][3]
+    assert len(changes) == 1
+    assert changes[0].path.split("/")[1] == "pr-123"
+    assert "demo" not in changes[0].path.split("/")
 
 
 def test_extend_without_expiry_denied():

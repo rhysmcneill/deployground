@@ -42,9 +42,7 @@ BASE = {
             }
         },
     },
-    "capabilities": {
-        "image-deploy": {"enabled": True, "allowedRegistries": ["ghcr.io/my-org"]}
-    },
+    "capabilities": {"image-deploy": {"enabled": True, "allowedRegistries": ["ghcr.io/my-org"]}},
     "access": {"rules": [{"user": "U012ABC", "environments": ["*"]}]},
     "deployTarget": {
         "type": "applicationset",

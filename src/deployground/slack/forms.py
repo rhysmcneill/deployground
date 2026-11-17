@@ -117,13 +117,13 @@ def build_deploy_modal(
     if len(entries) <= STATIC_SELECT_LIMIT:
         catalog_element: dict[str, Any] = {
             "type": "static_select",
-            "placeholder": _text("Select a stack"),
+            "placeholder": _text("Select a catalog entry"),
             "options": [_option(s) for s in entries],
         }
     else:
         catalog_element = {
             "type": "external_select",
-            "placeholder": _text("Search for a stack"),
+            "placeholder": _text("Search for a catalog entry"),
             "min_query_length": 0,
         }
     known_catalog = prefill is not None and prefill.catalog in entries

@@ -25,7 +25,13 @@ class FakeAuthz:
 
 def _rec(name, owner="U1", expires=None):
     return StackRecord(
-        name=name, catalog=name, env="dev", owner=owner, expires_at=expires, thread_ts="1.0", channel="C1"
+        name=name,
+        catalog=name,
+        env="dev",
+        owner=owner,
+        expires_at=expires,
+        thread_ts="1.0",
+        channel="C1",
     )
 
 

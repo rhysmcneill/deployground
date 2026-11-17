@@ -34,7 +34,7 @@ config:
     repo: ""
     pathTemplate: "{env}/{stack}/{component}/config.yaml"
   environments: {}
-  stacks: {}
+  catalog: {}
   capabilities: {}
   access:
     rules: []

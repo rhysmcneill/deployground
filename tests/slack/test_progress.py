@@ -23,7 +23,13 @@ class FakeClient:
 
 def _record(channel="C1", ts="1.0") -> StackRecord:
     return StackRecord(
-        name="shop", catalog="shop", env="dev", owner="U1", expires_at=None, thread_ts=ts, channel=channel
+        name="shop",
+        catalog="shop",
+        env="dev",
+        owner="U1",
+        expires_at=None,
+        thread_ts=ts,
+        channel=channel,
     )
 
 

@@ -217,28 +217,34 @@ class LifecycleService:
         except UnknownStack:
             catalog_components = {}
         still_cataloged = {name: c for name, c in components.items() if name in catalog_components}
-        if still_cataloged:
-            resolved = self._ctx.catalog.resolve_versions(
-                record.catalog, {name: c.version for name, c in still_cataloged.items()}
+        if not still_cataloged:
+            # Nothing can be regenerated at all: there is no PR to write the new expiry to
+            # git, so it would only ever live in memory and vanish on the next pod restart
+            # (StackIndex.rebuild() re-derives everything from git) -- potentially letting
+            # the reaper tear the stack down early despite the user being told it was
+            # extended. Fail loudly instead of silently "succeeding".
+            raise Denied(
+                f"Catalog entry {record.catalog!r} no longer exists; {stack!r} can't be "
+                "extended durably. Redeploy or destroy it."
             )
-            # resolve_versions resolves every catalog-defined component regardless of which
-            # names were in overrides, so narrow it back down to just the live, still-cataloged
-            # ones -- otherwise an unrelated catalog component with no live record would also
-            # get (re)generated here.
-            resolved = {name: resolved[name] for name in still_cataloged}
-            changes = self._ctx.deploy_target.files_for(stack, record.env, resolved, components)
-        else:
-            changes = []
-        if changes:
-            env_cfg = self._environments[record.env]
-            self._open_pr(
-                "extend",
-                stack,
-                record.env,
-                env_cfg,
-                f"Extend {stack} in {record.env} by {by}",
-                changes,
-            )
+        resolved = self._ctx.catalog.resolve_versions(
+            record.catalog, {name: c.version for name, c in still_cataloged.items()}
+        )
+        # resolve_versions resolves every catalog-defined component regardless of which
+        # names were in overrides, so narrow it back down to just the live, still-cataloged
+        # ones -- otherwise an unrelated catalog component with no live record would also
+        # get (re)generated here.
+        resolved = {name: resolved[name] for name in still_cataloged}
+        changes = self._ctx.deploy_target.files_for(stack, record.env, resolved, components)
+        env_cfg = self._environments[record.env]
+        self._open_pr(
+            "extend",
+            stack,
+            record.env,
+            env_cfg,
+            f"Extend {stack} in {record.env} by {by}",
+            changes,
+        )
         self._index.upsert(replace(record, expires_at=new_expiry, components=components))
 
     def destroy(self, user: str, stack: str) -> DestroyResult:
