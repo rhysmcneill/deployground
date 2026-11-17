@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.2](https://github.com/rhysmcneill/deployground/compare/deployground-v0.6.1...deployground-v0.6.2) (2026-11-17)
+
+
+### Bug Fixes
+
+* **deployground-chart:** bootstrap ConfigMap is also a PreSync hook ([#15](https://github.com/rhysmcneill/deployground/issues/15)) ([7e1b5d4](https://github.com/rhysmcneill/deployground/commit/7e1b5d4e7c02ee25a431dc444765547125968b76))
+
 ## [0.6.1](https://github.com/rhysmcneill/deployground/compare/deployground-v0.6.0...deployground-v0.6.1) (2026-11-17)
 
 
