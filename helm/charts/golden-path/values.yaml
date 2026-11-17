@@ -8,6 +8,8 @@ ingressHost: "" # when set (and port is set) an Ingress is rendered for this hos
 ingressClassName: "" # empty = cluster default
 env: {} # NAME: value
 secretRefs: [] # names of existing Secrets injected with envFrom
+imagePullSecrets: [] # names of existing dockerconfigjson Secrets kubelet uses to pull private images
+serviceAccountName: "" # existing ServiceAccount (e.g. IRSA) the pod runs under; does NOT affect image pulls
 
 # Resource requests/limits live here, not in component files (design spec section 8).
 resources:

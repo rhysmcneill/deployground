@@ -72,6 +72,16 @@ def test_single_service_is_stack_of_one():
     assert resolved["api"].port == 8080
 
 
+def test_resolve_versions_preserves_image_pull_secrets_and_service_account():
+    cfg = Config.model_validate(BASE)
+    cfg.stacks["api"].components["api"].imagePullSecrets = ["harbor-pull"]
+    cfg.stacks["api"].components["api"].serviceAccountName = "my-irsa-sa"
+    catalog = Catalog(lambda: cfg)
+    resolved = catalog.resolve_versions("api", {})
+    assert resolved["api"].imagePullSecrets == ["harbor-pull"]
+    assert resolved["api"].serviceAccountName == "my-irsa-sa"
+
+
 def test_resolve_uses_default_when_no_override():
     resolved = make_catalog().resolve_versions("shop", {})
     assert {name: r.version for name, r in resolved.items()} == {

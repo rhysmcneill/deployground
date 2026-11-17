@@ -28,6 +28,8 @@ def resolved(name: str) -> ResolvedComponent:
         ingressHost="demo-api.home.example" if is_api else None,
         env={"KEY": "value"} if is_api else {},
         secretRefs=["db"] if is_api else [],
+        imagePullSecrets=["harbor-pull"] if is_api else [],
+        serviceAccountName="my-irsa-sa" if is_api else None,
     )
 
 
@@ -104,6 +106,8 @@ def test_file_contains_workload_and_deployground_block():
     assert api["ingressHost"] == "demo-api.home.example"
     assert api["env"] == {"KEY": "value"}
     assert api["secretRefs"] == ["db"]
+    assert api["imagePullSecrets"] == ["harbor-pull"]
+    assert api["serviceAccountName"] == "my-irsa-sa"
     block = api["deployground"]
     assert block["owner"] == "U012ABC"
     assert block["expiresAt"] == "2026-11-13T09:00:00Z"
@@ -111,7 +115,8 @@ def test_file_contains_workload_and_deployground_block():
     assert block["threadTs"] == "1.1"
     assert block == to_metadata_block(record("api"))
     web = by_path["dev/demo/web/config.yaml"]
-    for key in ("port", "ingressHost", "env", "secretRefs"):
+    omitted = ("port", "ingressHost", "env", "secretRefs", "imagePullSecrets", "serviceAccountName")
+    for key in omitted:
         assert key not in web
 
 

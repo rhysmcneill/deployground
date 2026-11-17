@@ -70,6 +70,16 @@ class Component(_Model):
     ingressHost: str | None = None
     env: dict[str, str] = Field(default_factory=dict)
     secretRefs: list[str] = Field(default_factory=list)
+    # Names of pre-existing `kubernetes.io/dockerconfigjson` Secrets (operator-managed, e.g.
+    # via `kubectl create secret docker-registry`), wired onto the pod spec so kubelet can
+    # pull images from a private registry. This is the ONLY one of the two fields below that
+    # affects image pulls.
+    imagePullSecrets: list[str] = Field(default_factory=list)
+    # Name of a pre-existing ServiceAccount (operator-managed, e.g. via Terraform/IRSA
+    # tooling) the pod runs under, e.g. for IRSA access to AWS APIs at runtime. This does
+    # NOT help pull private images: kubelet pulls the image before the pod (and its
+    # ServiceAccount) exists, so this is a pod-runtime mechanism only, not a pull mechanism.
+    serviceAccountName: str | None = None
 
 
 class StackDef(_Model):
