@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.9](https://github.com/rhysmcneill/deployground/compare/deployground-v0.6.8...deployground-v0.6.9) (2026-11-17)
+
+
+### Bug Fixes
+
+* **deploytarget:** set the OCI chart name as its own field ([#30](https://github.com/rhysmcneill/deployground/issues/30)) ([6276b91](https://github.com/rhysmcneill/deployground/commit/6276b9105936399a960aa6010008edffbcbcbf30))
+
 ## [0.6.8](https://github.com/rhysmcneill/deployground/compare/deployground-v0.6.7...deployground-v0.6.8) (2026-11-17)
 
 
