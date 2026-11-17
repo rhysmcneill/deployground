@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.7.0](https://github.com/rhysmcneill/deployground/compare/deployground-v0.6.11...deployground-v0.7.0) (2026-11-17)
+
+
+### ⚠ BREAKING CHANGES
+
+* **config:** split Catalog from Stack name ([#40](https://github.com/rhysmcneill/deployground/issues/40))
+
+### Features
+
+* **catalog:** support {stack} in ingressHost for multi-deploy catalog stacks ([#36](https://github.com/rhysmcneill/deployground/issues/36)) ([7249a45](https://github.com/rhysmcneill/deployground/commit/7249a45a29df998d2f1c4bcdf8ee69f43acd6e1c))
+* **config:** split Catalog from Stack name ([#40](https://github.com/rhysmcneill/deployground/issues/40)) ([009765f](https://github.com/rhysmcneill/deployground/commit/009765fef395192ed226e97f96048dc217b41d72))
+
+
+### Bug Fixes
+
+* **lifecycle:** extend tolerates a component dropped from the catalog ([#38](https://github.com/rhysmcneill/deployground/issues/38)) ([64cf6a2](https://github.com/rhysmcneill/deployground/commit/64cf6a2c55e292b924a36890d12542069cc808fb))
+* **slack:** enable the Messages Tab in the app manifest ([#37](https://github.com/rhysmcneill/deployground/issues/37)) ([eba625f](https://github.com/rhysmcneill/deployground/commit/eba625f01966d29429586635f0da6796d6ab986a))
+
 ## [0.6.11](https://github.com/rhysmcneill/deployground/compare/deployground-v0.6.10...deployground-v0.6.11) (2026-11-17)
 
 
