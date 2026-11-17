@@ -10,6 +10,7 @@ NOW = datetime(2026, 11, 13, 9, 0, tzinfo=UTC)
 def make_record(name: str, expires_at: datetime | None) -> StackRecord:
     return StackRecord(
         name=name,
+        catalog=name,
         env="dev",
         owner="U1",
         expires_at=expires_at,
