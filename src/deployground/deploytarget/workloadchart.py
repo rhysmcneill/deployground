@@ -23,7 +23,10 @@ def chart_source(cfg: WorkloadChartCfg) -> dict[str, Any]:
     repo = cfg.repo or "ghcr.io/rhysmcneill"
     chart = cfg.chart or "golden-path-chart"
     version = cfg.version or __version__
+    # Argo CD's Helm-OCI source needs the chart name as its own `chart` field; baking it
+    # into repoURL leaves `chart` unset and Argo CD rejects the source outright.
     return {
-        "repoURL": f"oci://{repo}/{chart}",
+        "repoURL": f"oci://{repo}",
+        "chart": chart,
         "targetRevision": version,
     }
