@@ -110,6 +110,7 @@ def handle_prefill(deps: Deps, ack: Callable, body: dict[str, Any], client: Any)
     try:
         data = json.loads(body["actions"][0].get("value") or "{}")
         prefill = DeployInputs(
+            catalog=data["catalog"],
             stack=data["stack"],
             env=data["env"],
             overrides=dict(data.get("overrides") or {}),
@@ -142,12 +143,14 @@ def handle_modal_change(deps: Deps, ack: Callable, body: dict[str, Any], client:
         text = (values.get(f"{OVERRIDE_PREFIX}{name}", {}).get(ACTION_ID) or {}).get("value")
         if text:
             overrides[name] = text
+    catalog = selected("catalog")
     # Selected-but-untyped components get a row prefilled with the catalog default.
     for name in chosen:
-        overrides.setdefault(name, _default_version(deps, selected("stack"), name))
+        overrides.setdefault(name, _default_version(deps, catalog, name))
     ttl = ((values.get("ttl", {}).get(ACTION_ID) or {}).get("value") or "24h").strip() or "24h"
+    stack = (values.get("stack", {}).get(ACTION_ID) or {}).get("value") or ""
     prefill = DeployInputs(
-        stack=selected("stack"), env=selected("env"), overrides=overrides, ttl=ttl
+        catalog=catalog, stack=stack, env=selected("env"), overrides=overrides, ttl=ttl
     )
     client.views_update(
         view_id=view["id"],
@@ -156,16 +159,16 @@ def handle_modal_change(deps: Deps, ack: Callable, body: dict[str, Any], client:
     )
 
 
-def _default_version(deps: Deps, stack: str, component: str) -> str:
+def _default_version(deps: Deps, catalog: str, component: str) -> str:
     try:
-        return deps.catalog.get(stack).components[component].defaultVersion
+        return deps.catalog.get(catalog).components[component].defaultVersion
     except KeyError:
         return ""
 
 
-def handle_stack_options(deps: Deps, ack: Callable, body: dict[str, Any]) -> None:
+def handle_catalog_options(deps: Deps, ack: Callable, body: dict[str, Any]) -> None:
     query = (body.get("value") or "").lower()
-    names = [s for s in deps.catalog.list_stacks() if query in s.lower()][:STATIC_SELECT_LIMIT]
+    names = [s for s in deps.catalog.list_entries() if query in s.lower()][:STATIC_SELECT_LIMIT]
     ack(options=[{"text": {"type": "plain_text", "text": s}, "value": s} for s in names])
 
 
@@ -186,6 +189,9 @@ def _owner_email(client: Any, user: str) -> str:
 
 def handle_submit(deps: Deps, ack: Callable, body: dict[str, Any], client: Any) -> None:
     inputs, errors = parse_submission(body["view"]["state"]["values"])
+    if inputs is not None and deps.index.get(inputs.stack) is not None:
+        errors = {**errors, "stack": f"{inputs.stack!r} is already in use by a live stack."}
+        inputs = None
     if inputs is None:
         ack(response_action="errors", errors=errors)
         return
@@ -207,6 +213,7 @@ def handle_submit(deps: Deps, ack: Callable, body: dict[str, Any], client: Any) 
         expires_at=None,
         thread_ts=ts,
         channel=channel,
+        catalog=inputs.catalog,
     )
 
     def fail(reason: str) -> None:
@@ -217,9 +224,16 @@ def handle_submit(deps: Deps, ack: Callable, body: dict[str, Any], client: Any) 
 
     try:
         result = deps.lifecycle.deploy(
-            user, _owner_email(client, user), inputs.stack, inputs.env, inputs.overrides,
-            inputs.ttl, ts, channel,
-        )  # fmt: skip
+            user=user,
+            owner_email=_owner_email(client, user),
+            catalog=inputs.catalog,
+            stack=inputs.stack,
+            env=inputs.env,
+            overrides=inputs.overrides,
+            ttl=inputs.ttl,
+            thread_ts=ts,
+            channel=channel,
+        )
     except Denied as exc:
         fail(str(exc))
         client.chat_postEphemeral(channel=channel, user=user, text=f"Deploy refused: {exc}")
@@ -232,10 +246,11 @@ def handle_submit(deps: Deps, ack: Callable, body: dict[str, Any], client: Any) 
     env_cfg = deps.environments.get(inputs.env)
     needs_approval = env_cfg is not None and deps.capability.needs_approval(
         RenderInputs(
-            stack=inputs.stack, env=inputs.env, overrides=inputs.overrides, ttl=inputs.ttl,
+            catalog=inputs.catalog, stack=inputs.stack, env=inputs.env,
+            overrides=inputs.overrides, ttl=inputs.ttl,
             owner=user, owner_email="", thread_ts=ts, channel=channel,
             expires_at=result.expires_at,
-        ),
+        ),  # fmt: skip
         env_cfg,
     )  # fmt: skip
     states = {name: CompState.Progressing for name in result.stack_record.components}

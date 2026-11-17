@@ -43,15 +43,16 @@ class FakeLifecycle:
         self.calls = []
         self.deploy_exc = deploy_exc
 
-    def deploy(self, user, owner_email, stack, env, overrides, ttl, thread_ts, channel):
+    def deploy(self, user, owner_email, catalog, stack, env, overrides, ttl, thread_ts, channel):
         self.calls.append(
-            ("deploy", user, owner_email, stack, env, overrides, ttl, thread_ts, channel)
+            ("deploy", user, owner_email, catalog, stack, env, overrides, ttl, thread_ts, channel)
         )
         if self.deploy_exc:
             raise self.deploy_exc
         rec = StackRecord(
-            name=stack, env=env, owner=user, expires_at=None, thread_ts=thread_ts, channel=channel
-        )
+            name=stack, catalog=catalog, env=env, owner=user, expires_at=None,
+            thread_ts=thread_ts, channel=channel,
+        )  # fmt: skip
         return SimpleNamespace(
             pr_url="http://pr/1", pr_number=1, merged=True, expires_at=None, stack_record=rec
         )
@@ -85,11 +86,11 @@ class FakeCapability:
 def _record():
     comp = ComponentRecord(
         stack="shop", component="web", owner="U1", owner_email="e", env="dev",
-        expires_at=None, version="v1", thread_ts="1.0", channel="C1",
+        expires_at=None, version="v1", thread_ts="1.0", channel="C1", catalog="shop",
     )  # fmt: skip
     return StackRecord(
         name="shop", env="dev", owner="U1", expires_at=datetime(2026, 1, 1, tzinfo=UTC),
-        thread_ts="1.0", channel="C1", components={"web": comp, "worker": comp},
+        thread_ts="1.0", channel="C1", components={"web": comp, "worker": comp}, catalog="shop",
     )  # fmt: skip
 
 
@@ -140,7 +141,8 @@ def _text(value):
 
 def _submit_body(values=None):
     state = {
-        "stack": _select("shop"),
+        "catalog": _select("shop"),
+        "stack": _text("new-deploy"),
         "env": _select("dev"),
         "ttl": _text("24h"),
     }
@@ -232,13 +234,22 @@ def test_submit_posts_message_then_calls_deploy_with_thread_ts():
     assert client.named("chat_postMessage")[0]["channel"] == CHANNEL
     deploy = deps.lifecycle.calls[0]
     assert deploy[0] == "deploy"
-    assert deploy[3:5] == ("shop", "dev")
-    assert deploy[7] == "111.222" and deploy[8] == CHANNEL
+    assert deploy[3:5] == ("shop", "new-deploy")
+    assert deploy[8] == "111.222" and deploy[9] == CHANNEL
     assert deploy[2] == "u@example.com"
     update = client.named("chat_update")[-1]
     assert update["ts"] == "111.222"
     assert "Deploying" in json.dumps(update["blocks"])
     assert "awaiting approval" not in json.dumps(update["blocks"])
+
+
+def test_submit_rejects_a_stack_name_already_live():
+    deps, _ = make_deps()
+    client, ack = FakeClient(), Ack()
+    actions.handle_submit(deps, ack, _submit_body({"stack": _text("shop")}), client)
+    assert ack.calls[0]["response_action"] == "errors"
+    assert "stack" in ack.calls[0]["errors"]
+    assert deps.lifecycle.calls == []
 
 
 def test_submit_notes_approval_when_required():
@@ -279,7 +290,9 @@ def test_denied_marks_thread_failed_and_tells_user():
 def test_prefilled_button_opens_modal_with_values():
     deps, _ = make_deps()
     client, ack = FakeClient(), Ack()
-    value = json.dumps({"stack": "shop", "env": "staging", "overrides": {"web": "v9"}, "ttl": "2h"})
+    value = json.dumps(
+        {"catalog": "shop", "stack": "shop", "env": "staging", "overrides": {"web": "v9"}, "ttl": "2h"}
+    )
     body = {
         "user": {"id": "U1"},
         "trigger_id": "T1",
@@ -318,7 +331,7 @@ def test_cancel_deletes_confirmation_without_destroy():
 def test_stack_suggestions_filter_by_query():
     deps, _ = make_deps()
     ack = Ack()
-    actions.handle_stack_options(deps, ack, {"value": "sh"})
+    actions.handle_catalog_options(deps, ack, {"value": "sh"})
     assert [o["value"] for o in ack.calls[0]["options"]] == ["shop"]
 
 
