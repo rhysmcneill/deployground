@@ -131,7 +131,11 @@ class ApplicationSetTarget:
         annotations.update(subscribe_annotations())
 
         source = chart_source(self._cfg.workloadChart)
-        source["helm"] = {"valueFiles": ["$values/{{path.path}}/{{path.filename}}"]}
+        # The git "files" generator exposes the matched file's directory as {{path}} (not
+        # {{path.path}} -- that isn't a real generator variable here, so it was left as a
+        # literal, unsubstituted string and helm then failed to find the literal path
+        # "{{path.path}}/config.yaml").
+        source["helm"] = {"valueFiles": ["$values/{{path}}/{{path.filename}}"]}
         values_source = {
             "repoURL": repo_url,
             "targetRevision": self._repo_ref.branch,

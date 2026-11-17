@@ -175,7 +175,7 @@ def test_bootstrap_applicationset_templates_labels_annotations_and_subscription(
     assert chart["repoURL"] == "ghcr.io/rhysmcneill"
     assert chart["chart"] == "golden-path-chart"
     assert chart["targetRevision"] == deployground.__version__
-    assert chart["helm"]["valueFiles"] == ["$values/{{path.path}}/{{path.filename}}"]
+    assert chart["helm"]["valueFiles"] == ["$values/{{path}}/{{path.filename}}"]
     assert values_ref["repoURL"] == "git@github.com:acme/deploys.git"
     assert values_ref["targetRevision"] == "main"
     assert values_ref["ref"] == "values"
