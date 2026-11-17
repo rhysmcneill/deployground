@@ -49,6 +49,10 @@ environments:
     ttl: { default: none }
     requiresApproval: true
 
+# Catalog: reusable component definitions. Each entry is a named set of components (image,
+# default version, port, ...) that a user picks as "Catalog" in the deploy form. The entry's
+# name is NOT the name of a live deployment: each deploy also gets its own "Stack name" (typed
+# in the form), which becomes that deploy's namespace and URL.
 catalog:
   api:
     components:
