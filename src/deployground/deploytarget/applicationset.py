@@ -46,6 +46,10 @@ def _ref(key: str) -> str:
     return "{{" + f"{BLOCK_KEY}.{key}" + "}}"
 
 
+def _is_url(cluster: str) -> bool:
+    return cluster.startswith(("http://", "https://"))
+
+
 class ApplicationSetTarget:
     def __init__(self, cfg: DeployTargetCfg, repo_ref: RepoRef) -> None:
         self._cfg = cfg
@@ -158,8 +162,17 @@ class ApplicationSetTarget:
                     "spec": {
                         "project": "default",
                         "sources": [source, values_source],
-                        # The env's configured ArgoCD cluster; the stack is the namespace.
-                        "destination": {"name": cluster, "namespace": _ref("stack")},
+                        # The env's configured ArgoCD destination; the stack is the namespace.
+                        # A URL targets the cluster directly (zero setup: the well-known
+                        # https://kubernetes.default.svc needs no Argo CD Cluster
+                        # registration), so most single-cluster adopters never need to
+                        # register anything. Anything else is looked up as a registered
+                        # cluster *name*, for teams that manage several clusters from one
+                        # Argo CD.
+                        "destination": {
+                            ("server" if _is_url(cluster) else "name"): cluster,
+                            "namespace": _ref("stack"),
+                        },
                         "syncPolicy": {
                             "automated": {"prune": True, "selfHeal": True},
                             "syncOptions": ["CreateNamespace=true"],

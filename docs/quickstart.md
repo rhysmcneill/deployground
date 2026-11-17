@@ -25,8 +25,10 @@ there is **no** public URL, signing secret or event endpoint to configure.
 
 ## 2. Configuration
 
-Copy `examples/config.yaml` and edit it: your repos, environments (Argo CD cluster name, TTL,
-`autoMerge`, `requiresApproval`), the stack catalog, `capabilities.image-deploy.allowedRegistries`
+Copy `examples/config.yaml` and edit it: your repos, environments (each one's Argo CD
+destination -- `https://kubernetes.default.svc` if Argo CD manages its own cluster, or a
+registered cluster name for a multi-cluster Argo CD -- plus TTL, `autoMerge`,
+`requiresApproval`), the stack catalog, `capabilities.image-deploy.allowedRegistries`
 and `ingressDomains`, and `access.rules` (Slack user, usergroup or channel IDs; default deny).
 Config holds only the **names** of env vars for secrets (`authRef: {tokenEnv: GITHUB_TOKEN_NONPROD}`).
 Any key can also be overridden by an env var `DEPLOYGROUND_<PATH>` with `__` between segments,
