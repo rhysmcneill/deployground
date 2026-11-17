@@ -24,4 +24,15 @@ spec:
                   # operator doesn't resolve a named port against the Service and reports
                   # "no valid backends" instead.
                   number: {{ .Values.port }}
+  {{- if eq .Values.ingressClassName "tailscale" }}
+  # Tailscale's own ingress operator needs the host listed here (it provisions its own
+  # cert for it) -- without this it rejects the rule's host outright as "unsupported".
+  # No secretName: Tailscale issues the cert itself. Scoped to ingressClassName ==
+  # "tailscale" specifically: a bare tls.hosts entry with no secretName is Tailscale's
+  # own convention, not a general one -- on nginx/ALB/GKE it would just warn about a
+  # missing secret, or conflict with their own managed-cert annotations, for no benefit.
+  tls:
+    - hosts:
+        - {{ .Values.ingressHost | quote }}
+  {{- end }}
 {{- end }}
