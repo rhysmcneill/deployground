@@ -6,8 +6,11 @@ on:
   workflow_dispatch:
     inputs:
       tag_name:
-        description: 'Release tag to build and publish (e.g. v0.1.0)'
+        description: 'Bot release tag to build and publish the image for (e.g. v0.1.0)'
         required: true
+      chart_version:
+        description: 'golden-path chart version to package and push (e.g. 0.1.0); leave empty to skip'
+        required: false
 
 permissions: read-all
 
@@ -19,8 +22,18 @@ jobs:
       pull-requests: write
     runs-on: ubuntu-latest
     outputs:
+      # Root "deployground" package (the bot itself) — release-please-action gives the root
+      # path unprefixed output names.
       release_created: ${{ steps.release.outputs.release_created }}
       tag_name: ${{ steps.release.outputs.tag_name }}
+      # "golden-path" chart package — a non-root path, so its outputs are prefixed
+      # "<path>--<name>" by the action (bracket access needed: the path contains "/").
+      # Its version can differ from the bot's even though linked-versions releases both
+      # together, so every consumer of this chart's version MUST read these, never the
+      # root outputs above.
+      chart_release_created: ${{ steps.release.outputs['helm/charts/golden-path--release_created'] }}
+      chart_version: ${{ steps.release.outputs['helm/charts/golden-path--version'] }}
+      chart_tag_name: ${{ steps.release.outputs['helm/charts/golden-path--tag_name'] }}
     steps:
       - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v4.4.0
         id: release
@@ -89,8 +102,8 @@ jobs:
     needs: release-please
     if: |
       github.repository == 'rhysmcneill/deployground' && (
-        github.event_name == 'workflow_dispatch' ||
-        (needs.release-please.outputs.release_created == 'true' && needs.release-please.outputs.tag_name != '')
+        (github.event_name == 'workflow_dispatch' && github.event.inputs.chart_version != '') ||
+        (needs.release-please.outputs.chart_release_created == 'true' && needs.release-please.outputs.chart_version != '')
       )
     permissions:
       contents: read
@@ -99,15 +112,20 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.tag_name || needs.release-please.outputs.tag_name }}
+          # Automated: the chart's OWN release tag (its version can differ from the bot's,
+          # even though linked-versions releases both in the same run — see release-please
+          # job outputs above). Manual: whatever ref this workflow_dispatch run targets.
+          ref: ${{ github.event_name == 'workflow_dispatch' && github.ref || needs.release-please.outputs.chart_tag_name }}
 
-      - name: Derive chart version from release tag
+      - name: Derive chart version
         id: version
         env:
-          TAG: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.tag_name || needs.release-please.outputs.tag_name }}
+          DISPATCH_VERSION: ${{ github.event.inputs.chart_version }}
+          RELEASE_VERSION: ${{ needs.release-please.outputs.chart_version }}
         run: |
-          test -n "$TAG"
-          echo "VERSION=${TAG#v}" >> $GITHUB_OUTPUT
+          VERSION="${DISPATCH_VERSION:-$RELEASE_VERSION}"
+          test -n "$VERSION"
+          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
 
       - name: Verify helm is available
         run: helm version
