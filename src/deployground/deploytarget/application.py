@@ -124,6 +124,10 @@ class ApplicationTarget:
                 "syncPolicy": {
                     "automated": {"prune": True, "selfHeal": True},
                     "syncOptions": ["CreateNamespace=true"],
+                    # Labels every namespace this creates, so cluster-wide resources (e.g. a
+                    # ClusterExternalSecret provisioning a shared pull secret) can target "any
+                    # deployground-managed namespace" generically.
+                    "managedNamespaceMetadata": {"labels": {LABEL_MANAGED: "true"}},
                 },
             },
         }
