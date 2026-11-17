@@ -64,6 +64,9 @@ stacks:
         # for IRSA) the pod runs under, so the workload's own code can call AWS APIs at
         # runtime. This does NOT help pull private images — that's imagePullSecrets above:
         # serviceAccountName: my-irsa-sa
+        # Optional: the Ingress class for ingressHost above (e.g. "tailscale", "nginx");
+        # unset uses the cluster's default IngressClass.
+        # ingressClassName: tailscale
       worker: { image: ghcr.io/my-org/worker, defaultVersion: v2.0.0 }
 
 capabilities:

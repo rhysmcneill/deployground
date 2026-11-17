@@ -69,6 +69,7 @@ def test_application_cr_per_component_has_labels_metadata_and_subscription_annot
         "secretRefs": ["db"],
         "imagePullSecrets": ["harbor-pull"],
         "serviceAccountName": "my-irsa-sa",
+        "ingressClassName": "tailscale",
     }
     web = by_path["dev/demo/web/app.yaml"]
     web_values = yaml.safe_load(web["spec"]["sources"][0]["helm"]["values"])
