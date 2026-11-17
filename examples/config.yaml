@@ -24,7 +24,7 @@ deployTarget:
   # workloadChart:
   #   type: oci # or: git
   #   repo: ghcr.io/rhysmcneill # oci: registry/org (chart name is appended)
-  #   chart: golden-path
+  #   chart: golden-path-chart
   #   version: null # oci: targetRevision; null -> this bot's own version
   #   gitRepo: https://github.com/my-org/my-charts.git # git: full chart repo URL
   #   gitRef: main # git: targetRevision

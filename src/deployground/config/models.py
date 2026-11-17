@@ -105,7 +105,7 @@ class WorkloadChartCfg(_Model):
     """Source of the workload chart that renders each component's manifests.
 
     Fully optional: a `deployTarget` with no `workloadChart` key still validates and gets
-    the default OCI chart (Deployground's own published `golden-path`), pinned to the
+    the default OCI chart (Deployground's own published `golden-path-chart`), pinned to the
     running bot's own version at render time when `version` is unset — keeping the bot and
     its default chart in lockstep across releases.
     """
@@ -113,7 +113,7 @@ class WorkloadChartCfg(_Model):
     type: Literal["oci", "git"] = "oci"
     # oci
     repo: str | None = "ghcr.io/rhysmcneill"  # registry/org; chart name is appended
-    chart: str | None = "golden-path"
+    chart: str | None = "golden-path-chart"
     version: str | None = None  # targetRevision; None -> deployground.__version__ at render time
     # git (mirrors the existing colocated-in-target-repo behavior, for operators who want
     # their own chart via git instead of OCI)

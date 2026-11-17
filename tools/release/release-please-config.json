@@ -20,7 +20,7 @@
     {
       "type": "linked-versions",
       "groupName": "deployground",
-      "components": ["deployground", "golden-path", "deployground-chart"]
+      "components": ["deployground", "golden-path-chart", "deployground-chart"]
     }
   ],
   "packages": {
@@ -32,8 +32,8 @@
     },
     "helm/charts/golden-path": {
       "release-type": "helm",
-      "package-name": "golden-path",
-      "component": "golden-path",
+      "package-name": "golden-path-chart",
+      "component": "golden-path-chart",
       "changelog-path": "helm/charts/golden-path/CHANGELOG.md"
     },
     "helm/charts/deployground": {

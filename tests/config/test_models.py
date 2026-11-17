@@ -156,7 +156,7 @@ def test_deploy_target_default_workload_chart_is_oci_golden_path():
     chart = cfg.deployTarget.workloadChart
     assert chart.type == "oci"
     assert chart.repo == "ghcr.io/rhysmcneill"
-    assert chart.chart == "golden-path"
+    assert chart.chart == "golden-path-chart"
     assert chart.version is None
 
 

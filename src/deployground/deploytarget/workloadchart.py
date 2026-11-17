@@ -21,7 +21,7 @@ def chart_source(cfg: WorkloadChartCfg) -> dict[str, Any]:
             "path": cfg.chartPath,
         }
     repo = cfg.repo or "ghcr.io/rhysmcneill"
-    chart = cfg.chart or "golden-path"
+    chart = cfg.chart or "golden-path-chart"
     version = cfg.version or __version__
     return {
         "repoURL": f"oci://{repo}/{chart}",
