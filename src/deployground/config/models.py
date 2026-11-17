@@ -101,10 +101,40 @@ class Access(_Model):
     rules: list[AccessRule] = Field(default_factory=list)
 
 
+class WorkloadChartCfg(_Model):
+    """Source of the workload chart that renders each component's manifests.
+
+    Fully optional: a `deployTarget` with no `workloadChart` key still validates and gets
+    the default OCI chart (Deployground's own published `golden-path-chart`), pinned to the
+    running bot's own version at render time when `version` is unset — keeping the bot and
+    its default chart in lockstep across releases.
+    """
+
+    type: Literal["oci", "git"] = "oci"
+    # oci
+    repo: str | None = "ghcr.io/rhysmcneill"  # registry/org; chart name is appended
+    chart: str | None = "golden-path-chart"
+    version: str | None = None  # targetRevision; None -> deployground.__version__ at render time
+    # git (mirrors the existing colocated-in-target-repo behavior, for operators who want
+    # their own chart via git instead of OCI)
+    gitRepo: str | None = None  # full git URL
+    gitRef: str | None = None
+    chartPath: str | None = None
+
+    @model_validator(mode="after")
+    def _git_requires_repo_and_path(self) -> Self:
+        if self.type == "git" and not (self.gitRepo and self.chartPath):
+            raise ValueError(
+                "workloadChart type 'git' requires both 'gitRepo' and 'chartPath' to be set"
+            )
+        return self
+
+
 class DeployTargetCfg(_Model):
     type: Literal["applicationset", "application"]
     repo: str
     pathTemplate: str
+    workloadChart: WorkloadChartCfg = Field(default_factory=WorkloadChartCfg)
 
 
 class StatusSourceCfg(_Model):

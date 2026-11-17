@@ -14,6 +14,7 @@ import yaml
 from deployground.catalog import ResolvedComponent
 from deployground.config.models import Config, DeployTargetCfg, RepoRef
 from deployground.deploytarget.notifications import notifications_cm, subscribe_annotations
+from deployground.deploytarget.workloadchart import chart_source
 from deployground.git.base import FileChange
 from deployground.metadata import (
     LABEL_COMPONENT,
@@ -78,7 +79,6 @@ class ApplicationTarget:
         comp: ResolvedComponent,
         record: ComponentRecord,
     ) -> dict[str, Any]:
-        repo_url = f"https://github.com/{self._repo_ref.owner}/{self._repo_ref.name}.git"
         values: dict[str, Any] = {"image": f"{comp.image}:{comp.version}"}
         if comp.port is not None:
             values["port"] = comp.port
@@ -89,6 +89,13 @@ class ApplicationTarget:
             values["env"] = dict(comp.env)
         if comp.secretRefs:
             values["secretRefs"] = list(comp.secretRefs)
+        # Literal manifest (no Go-template vars): the chart source is resolved once here
+        # from config, same defaulting as the ApplicationSet target. Values are already
+        # known in full, so they stay inline on the chart source's `helm.values` rather
+        # than a second `ref: values` file source — there is no separate values file for
+        # this target to point at (the component file *is* this whole Application CR).
+        source = chart_source(self._cfg.workloadChart)
+        source["helm"] = {"values": yaml.safe_dump(values, sort_keys=False)}
         return {
             "apiVersion": "argoproj.io/v1alpha1",
             "kind": "Application",
@@ -105,12 +112,7 @@ class ApplicationTarget:
             },
             "spec": {
                 "project": "default",
-                "source": {
-                    "repoURL": repo_url,
-                    "targetRevision": self._repo_ref.branch,
-                    "path": "golden-path",
-                    "helm": {"values": yaml.safe_dump(values, sort_keys=False)},
-                },
+                "sources": [source],
                 "destination": {"name": cluster, "namespace": stack},
                 "syncPolicy": {
                     "automated": {"prune": True, "selfHeal": True},

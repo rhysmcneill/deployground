@@ -1,6 +1,7 @@
 import pytest
 import yaml
 
+import deployground
 from deployground.config.models import DeployTargetCfg
 from deployground.deploytarget import make_deploy_target
 from deployground.deploytarget.application import ApplicationTarget
@@ -53,8 +54,12 @@ def test_application_cr_per_component_has_labels_metadata_and_subscription_annot
     spec = app["spec"]
     assert spec["syncPolicy"]["automated"]["prune"] is True
     assert spec["destination"] == {"name": "dev-cluster", "namespace": "demo"}
-    assert spec["source"]["repoURL"] == "https://github.com/acme/deploys.git"
-    values = yaml.safe_load(spec["source"]["helm"]["values"])
+    sources = spec["sources"]
+    assert len(sources) == 1
+    chart = sources[0]
+    assert chart["repoURL"] == "oci://ghcr.io/rhysmcneill/golden-path-chart"
+    assert chart["targetRevision"] == deployground.__version__
+    values = yaml.safe_load(chart["helm"]["values"])
     assert values == {
         "image": "ghcr.io/org/api:1.2.3",
         "port": 8080,
@@ -64,8 +69,30 @@ def test_application_cr_per_component_has_labels_metadata_and_subscription_annot
         "secretRefs": ["db"],
     }
     web = by_path["dev/demo/web/app.yaml"]
-    web_values = yaml.safe_load(web["spec"]["source"]["helm"]["values"])
+    web_values = yaml.safe_load(web["spec"]["sources"][0]["helm"]["values"])
     assert web_values == {"image": "ghcr.io/org/web:1.2.3", "replicas": 2}
+
+
+def test_application_chart_source_uses_git_override():
+    cfg = DeployTargetCfg(
+        type="application",
+        repo="deploys",
+        pathTemplate="{env}/{stack}/{component}/app.yaml",
+        workloadChart={
+            "type": "git",
+            "gitRepo": "https://github.com/acme/charts.git",
+            "gitRef": "v1.0.0",
+            "chartPath": "charts/custom",
+        },
+    )
+    changes = ApplicationTarget(cfg, REPO, CLUSTERS).files_for(
+        "demo", "dev", {n: resolved(n) for n in NAMES}, {n: record(n) for n in NAMES}
+    )
+    app = yaml.safe_load(next(c.content for c in changes if c.path.endswith("api/app.yaml")))
+    chart = app["spec"]["sources"][0]
+    assert chart["repoURL"] == "https://github.com/acme/charts.git"
+    assert chart["targetRevision"] == "v1.0.0"
+    assert chart["path"] == "charts/custom"
 
 
 def test_destination_uses_the_env_cluster():

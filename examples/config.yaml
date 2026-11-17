@@ -18,6 +18,17 @@ deployTarget:
   type: applicationset # or: application
   repo: gitops-nonprod # which configured repo holds the component files
   pathTemplate: "{env}/{stack}/{component}/config.yaml"
+  # Optional: where the workload chart comes from. Fully optional — omitting this entirely
+  # uses the default below (the published golden-path chart, pinned to this bot's own
+  # version). Uncomment to override:
+  # workloadChart:
+  #   type: oci # or: git
+  #   repo: ghcr.io/rhysmcneill # oci: registry/org (chart name is appended)
+  #   chart: golden-path-chart
+  #   version: null # oci: targetRevision; null -> this bot's own version
+  #   gitRepo: https://github.com/my-org/my-charts.git # git: full chart repo URL
+  #   gitRef: main # git: targetRevision
+  #   chartPath: charts/my-workload # git: path to the chart within gitRepo
 
 environments:
   homelab:

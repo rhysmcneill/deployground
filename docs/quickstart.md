@@ -54,9 +54,15 @@ The chart reads the Secret named by `existingSecret` (default `deployground-secr
 (it is rendered to a ConfigMap mounted as `--config`) and optionally pin `image.tag`.
 Multi-arch images (amd64/arm64) are published to `ghcr.io/rhysmcneill/deployground:<version>` on
 each release (the tag defaults to the chart `appVersion`); or build locally with the repo
-`Dockerfile`:
+`Dockerfile`. The chart itself is also published, as an OCI artifact at
+`oci://ghcr.io/rhysmcneill/deployground-chart`:
 
-    helm install deployground helm/deployground -n deployground -f my-values.yaml
+    helm install deployground oci://ghcr.io/rhysmcneill/deployground-chart --version <version> \
+      -n deployground -f my-values.yaml
+
+or from a local checkout (e.g. a fork, or a specific git ref):
+
+    helm install deployground helm/charts/deployground -n deployground -f my-values.yaml
 
 Non-secret env: `env.DG_DEFAULT_CHANNEL` (channel ID for deploy threads), `env.DG_WEBHOOK_PORT`
 (default 8080), and optionally `DG_WEBHOOK_HOST` (default `0.0.0.0`). The bot runs as a single
@@ -79,8 +85,10 @@ the `on-deployed` / `on-health-degraded` / `on-sync-failed` triggers. Note that 
 printed ConfigMap replaces the existing `argocd-notifications-cm`, so merge it with any
 existing notification config first.
 
-The ApplicationSet deploys with `path: golden-path`: copy `charts/golden-path` to `golden-path/`
-at the root of the target GitOps repo (see `charts/golden-path/README.md`).
+The default workload chart is published at `oci://ghcr.io/rhysmcneill/golden-path-chart` and is
+pulled automatically — no manual copy into the target GitOps repo is needed. Point
+`deployTarget.workloadChart` at your own chart (`type: oci` or `type: git`) to use a different
+one; see `helm/charts/golden-path/README.md`.
 
 The webhook URL in the ConfigMap is `<statusSource.webhookUrl><webhookPath>`; see section 5 for
 `webhookUrl` (it defaults to the in-cluster Service DNS for release `deployground` in namespace

@@ -4,7 +4,7 @@ from datetime import timedelta
 import pytest
 from pydantic import ValidationError
 
-from deployground.config.models import Config, parse_duration
+from deployground.config.models import Config, WorkloadChartCfg, parse_duration
 
 VALID = {
     "git": {
@@ -149,3 +149,43 @@ def test_invalid_duration_rejected_at_parse_time():
     data["environments"]["homelab"]["ttl"] = {"default": "soon"}
     with pytest.raises(ValidationError):
         Config.model_validate(data)
+
+
+def test_deploy_target_default_workload_chart_is_oci_golden_path():
+    cfg = Config.model_validate(VALID)
+    chart = cfg.deployTarget.workloadChart
+    assert chart.type == "oci"
+    assert chart.repo == "ghcr.io/rhysmcneill"
+    assert chart.chart == "golden-path-chart"
+    assert chart.version is None
+
+
+def test_workload_chart_oci_override_parses():
+    data = make()
+    data["deployTarget"] = {
+        **data["deployTarget"],
+        "workloadChart": {"repo": "ghcr.io/my-org", "chart": "my-chart", "version": "1.2.3"},
+    }
+    cfg = Config.model_validate(data)
+    chart = cfg.deployTarget.workloadChart
+    assert chart.repo == "ghcr.io/my-org"
+    assert chart.chart == "my-chart"
+    assert chart.version == "1.2.3"
+
+
+def test_workload_chart_git_requires_repo_and_path():
+    with pytest.raises(ValidationError, match="gitRepo"):
+        WorkloadChartCfg(type="git")
+    with pytest.raises(ValidationError, match="gitRepo"):
+        WorkloadChartCfg(type="git", gitRepo="https://github.com/acme/charts.git")
+
+
+def test_workload_chart_git_with_repo_and_path_parses():
+    chart = WorkloadChartCfg(
+        type="git",
+        gitRepo="https://github.com/acme/charts.git",
+        gitRef="main",
+        chartPath="charts/custom",
+    )
+    assert chart.gitRepo == "https://github.com/acme/charts.git"
+    assert chart.chartPath == "charts/custom"
