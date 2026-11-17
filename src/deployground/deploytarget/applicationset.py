@@ -112,7 +112,7 @@ class ApplicationSetTarget:
         return manifests
 
     def _applicationset(self, env_name: str, cluster: str) -> dict[str, Any]:
-        repo_url = f"https://github.com/{self._repo_ref.owner}/{self._repo_ref.name}.git"
+        repo_url = f"git@github.com:{self._repo_ref.owner}/{self._repo_ref.name}.git"
         # `{env}/{stack}/{component}/config.yaml` -> `dev/*/*/config.yaml`
         glob = self._path("*", env_name, "*")
 
