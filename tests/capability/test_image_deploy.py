@@ -18,7 +18,7 @@ def make_cfg(ingress_host="demo-api.home.example") -> Config:
     base = make_config().model_dump()
     base["environments"]["prod"]["requiresApproval"] = True
     base["environments"]["dev"]["ttl"] = {"default": "24h", "max": "72h"}
-    base["stacks"] = {
+    base["catalog"] = {
         "demo": {
             "components": {
                 "api": {
@@ -52,6 +52,7 @@ def make_ctx(config: Config | None = None) -> RenderContext:
 
 def make_inputs(**kw) -> RenderInputs:
     args = dict(
+        catalog="demo",
         stack="demo",
         env="dev",
         overrides={},
@@ -80,6 +81,7 @@ def test_render_file_includes_deployground_block():
     by_path = {c.path: yaml.safe_load(c.content) for c in changes}
     record = parse_metadata_block(by_path["dev/demo/api/config.yaml"])
     assert record == ComponentRecord(
+        catalog="demo",
         stack="demo",
         component="api",
         owner="U012ABC",
@@ -90,6 +92,22 @@ def test_render_file_includes_deployground_block():
         thread_ts="1.1",
         channel="C1",
     )
+
+
+def test_render_resolves_versions_from_catalog_not_stack_name():
+    changes = ImageDeployCapability().render(
+        make_inputs(catalog="demo", stack="pr-123"), make_ctx()
+    )
+    by_path = {c.path: yaml.safe_load(c.content) for c in changes}
+    assert sorted(by_path) == [
+        "dev/pr-123/api/config.yaml",
+        "dev/pr-123/web/config.yaml",
+    ]
+    for path in by_path:
+        record = parse_metadata_block(by_path[path])
+        assert record.stack == "pr-123"
+        assert record.catalog == "demo"
+    assert parse_metadata_block(by_path["dev/pr-123/api/config.yaml"]).version == "1.0.0"
 
 
 def test_render_applies_version_overrides():
@@ -122,6 +140,7 @@ def test_render_rejects_disallowed_registry():
 def test_destroy_emits_delete_for_all_components():
     stack = StackRecord(
         name="demo",
+        catalog="demo",
         env="dev",
         owner="U012ABC",
         expires_at=EXPIRES,

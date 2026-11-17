@@ -23,10 +23,11 @@ class ImageDeployCapability:
     title = "Deploy images"
 
     def render(self, inputs: RenderInputs, ctx: RenderContext) -> list[FileChange]:
-        components = ctx.catalog.resolve_versions(inputs.stack, inputs.overrides)
+        components = ctx.catalog.resolve_versions(inputs.catalog, inputs.overrides)
         self._check_guardrails(components, ctx)
         records = {
             name: ComponentRecord(
+                catalog=inputs.catalog,
                 stack=inputs.stack,
                 component=name,
                 owner=inputs.owner,
