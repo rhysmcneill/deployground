@@ -86,7 +86,7 @@ class Component(_Model):
     ingressClassName: str | None = None
 
 
-class StackDef(_Model):
+class CatalogEntry(_Model):
     components: dict[str, Component]
 
 
@@ -180,7 +180,7 @@ class GitCfg(_Model):
 class Config(_Model):
     git: GitCfg
     environments: dict[str, Environment]
-    stacks: dict[str, StackDef]
+    catalog: dict[str, CatalogEntry]
     capabilities: dict[str, CapabilityCfg] = Field(default_factory=dict)
     access: Access = Field(default_factory=Access)
     deployTarget: DeployTargetCfg
@@ -204,12 +204,12 @@ class Config(_Model):
             if cap.enabled
             for registry in cap.allowedRegistries
         ]
-        for stack_name, stack in self.stacks.items():
-            for comp_name, comp in stack.components.items():
+        for catalog_name, entry in self.catalog.items():
+            for comp_name, comp in entry.components.items():
                 if not any(_in_registry(comp.image, r) for r in allowed):
                     errors.append(
-                        f"stack {stack_name!r} component {comp_name!r} image {comp.image!r} "
-                        f"is not under any allowed registry {allowed!r}"
+                        f"catalog entry {catalog_name!r} component {comp_name!r} "
+                        f"image {comp.image!r} is not under any allowed registry {allowed!r}"
                     )
 
         for i, rule in enumerate(self.access.rules):

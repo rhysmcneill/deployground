@@ -4,7 +4,7 @@ from datetime import timedelta
 import pytest
 from pydantic import ValidationError
 
-from deployground.config.models import Config, WorkloadChartCfg, parse_duration
+from deployground.config.models import CatalogEntry, Config, WorkloadChartCfg, parse_duration
 
 VALID = {
     "git": {
@@ -27,7 +27,7 @@ VALID = {
             "requiresApproval": False,
         }
     },
-    "stacks": {
+    "catalog": {
         "api": {
             "components": {
                 "api": {
@@ -38,9 +38,7 @@ VALID = {
             }
         }
     },
-    "capabilities": {
-        "image-deploy": {"enabled": True, "allowedRegistries": ["ghcr.io/my-org"]}
-    },
+    "capabilities": {"image-deploy": {"enabled": True, "allowedRegistries": ["ghcr.io/my-org"]}},
     "access": {"rules": [{"user": "U012ABC", "environments": ["*"]}]},
     "deployTarget": {
         "type": "applicationset",
@@ -60,40 +58,53 @@ def make(**overrides):
 def test_minimal_valid_config_parses():
     cfg = Config.model_validate(VALID)
     cfg.validate_refs()
-    assert cfg.stacks["api"].components["api"].replicas == 1
+    assert cfg.catalog["api"].components["api"].replicas == 1
     assert cfg.lifecycle.maxLivePerUser == 10
     assert parse_duration(cfg.lifecycle.warnBefore) == timedelta(hours=1)
     assert parse_duration(cfg.lifecycle.reaperInterval) == timedelta(minutes=1)
 
 
+def test_catalog_key_validates_as_dict_of_catalog_entries():
+    cfg = Config.model_validate(VALID)
+    assert isinstance(cfg.catalog["api"], CatalogEntry)
+    assert cfg.catalog["api"].components["api"].replicas == 1
+
+
+def test_lingering_stacks_key_is_rejected():
+    data = make()
+    data["stacks"] = data.pop("catalog")
+    with pytest.raises(ValidationError, match="stacks"):
+        Config.model_validate(data)
+
+
 def test_component_image_pull_secrets_and_service_account_default_empty():
     cfg = Config.model_validate(VALID)
-    comp = cfg.stacks["api"].components["api"]
+    comp = cfg.catalog["api"].components["api"]
     assert comp.imagePullSecrets == []
     assert comp.serviceAccountName is None
 
 
 def test_component_image_pull_secrets_and_service_account_round_trip():
     data = make()
-    data["stacks"]["api"]["components"]["api"]["imagePullSecrets"] = ["harbor-pull"]
-    data["stacks"]["api"]["components"]["api"]["serviceAccountName"] = "my-irsa-sa"
+    data["catalog"]["api"]["components"]["api"]["imagePullSecrets"] = ["harbor-pull"]
+    data["catalog"]["api"]["components"]["api"]["serviceAccountName"] = "my-irsa-sa"
     cfg = Config.model_validate(data)
-    comp = cfg.stacks["api"].components["api"]
+    comp = cfg.catalog["api"].components["api"]
     assert comp.imagePullSecrets == ["harbor-pull"]
     assert comp.serviceAccountName == "my-irsa-sa"
 
 
 def test_component_ingress_class_name_default_empty():
     cfg = Config.model_validate(VALID)
-    comp = cfg.stacks["api"].components["api"]
+    comp = cfg.catalog["api"].components["api"]
     assert comp.ingressClassName is None
 
 
 def test_component_ingress_class_name_round_trip():
     data = make()
-    data["stacks"]["api"]["components"]["api"]["ingressClassName"] = "tailscale"
+    data["catalog"]["api"]["components"]["api"]["ingressClassName"] = "tailscale"
     cfg = Config.model_validate(data)
-    comp = cfg.stacks["api"].components["api"]
+    comp = cfg.catalog["api"].components["api"]
     assert comp.ingressClassName == "tailscale"
 
 
@@ -134,14 +145,14 @@ def test_access_rule_unknown_environment_fails():
 
 def test_stack_image_outside_allowed_registry_fails():
     data = make()
-    data["stacks"]["api"]["components"]["api"]["image"] = "docker.io/evil/api"
+    data["catalog"]["api"]["components"]["api"]["image"] = "docker.io/evil/api"
     with pytest.raises(ValueError, match="docker.io/evil/api"):
         Config.model_validate(data).validate_refs()
 
 
 def test_registry_match_respects_path_boundary():
     data = make()
-    data["stacks"]["api"]["components"]["api"]["image"] = "ghcr.io/my-org-evil/api"
+    data["catalog"]["api"]["components"]["api"]["image"] = "ghcr.io/my-org-evil/api"
     with pytest.raises(ValueError, match="my-org-evil"):
         Config.model_validate(data).validate_refs()
 

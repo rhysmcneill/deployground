@@ -49,7 +49,7 @@ environments:
     ttl: { default: none }
     requiresApproval: true
 
-stacks:
+catalog:
   api:
     components:
       api: { image: ghcr.io/my-org/api, defaultVersion: v1.2.3, port: 8080 }
