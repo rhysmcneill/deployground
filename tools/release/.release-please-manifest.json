@@ -1,5 +1,5 @@
 {
-  ".": "0.6.7",
+  ".": "0.6.8",
   "helm/charts/golden-path": "0.4.0",
   "helm/charts/deployground": "0.5.5"
 }
