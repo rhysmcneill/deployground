@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.0](https://github.com/rhysmcneill/deployground/compare/deployground-v0.8.2...deployground-v0.9.0) (2026-11-17)
+
+
+### Features
+
+* **slack:** scrap the shared channel, DM the user directly ([#47](https://github.com/rhysmcneill/deployground/issues/47)) ([714ba68](https://github.com/rhysmcneill/deployground/commit/714ba6862e0c0dd904c1bdb335957809a84e9eaa))
+
 ## [0.8.2](https://github.com/rhysmcneill/deployground/compare/deployground-v0.8.1...deployground-v0.8.2) (2026-11-17)
 
 
