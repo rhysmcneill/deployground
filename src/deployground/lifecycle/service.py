@@ -44,6 +44,14 @@ class DestroyResult:
     merged: bool
 
 
+@dataclass(frozen=True)
+class ExtendResult:
+    pr_url: str
+    pr_number: int
+    merged: bool
+    expires_at: datetime | None
+
+
 class LifecycleService:
     """``clock`` returns an aware UTC datetime (injectable for tests)."""
 
@@ -190,7 +198,7 @@ class LifecycleService:
             stack_record=record,
         )
 
-    def extend(self, user: str, stack: str, by: str) -> None:
+    def extend(self, user: str, stack: str, by: str) -> ExtendResult:
         """Push expiry out by ``by`` measured from the CURRENT expiry (not from now)."""
         record = self._managed(user, stack)
         if record.expires_at is None:
@@ -237,7 +245,7 @@ class LifecycleService:
         resolved = {name: resolved[name] for name in still_cataloged}
         changes = self._ctx.deploy_target.files_for(stack, record.env, resolved, components)
         env_cfg = self._environments[record.env]
-        self._open_pr(
+        pr = self._open_pr(
             "extend",
             stack,
             record.env,
@@ -246,6 +254,9 @@ class LifecycleService:
             changes,
         )
         self._index.upsert(replace(record, expires_at=new_expiry, components=components))
+        return ExtendResult(
+            pr_url=pr.url, pr_number=pr.number, merged=pr.merged, expires_at=new_expiry
+        )
 
     def destroy(self, user: str, stack: str) -> DestroyResult:
         record = self._managed(user, stack)

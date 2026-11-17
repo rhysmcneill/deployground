@@ -61,7 +61,6 @@ class Deps:
     capability: Capability
     environments: dict[str, Environment]
     reaper_ack: Callable[[str], None]  # Task 18: acknowledge_warning(stack)
-    channel_default: str
     statuses: Callable[[], dict[str, StackState] | None] = lambda: None
 
 
@@ -198,14 +197,16 @@ def handle_submit(deps: Deps, ack: Callable, body: dict[str, Any], client: Any) 
     ack()
     user = _user(body)
 
-    # Post the progress message FIRST so deploy() can embed its ts in the files.
+    # Post the progress message FIRST so deploy() can embed its ts in the files. DMs the
+    # deploying user directly (channel=user opens/uses their DM) rather than a shared
+    # channel, so every deploy's whole lifecycle lives in that user's own Messages Tab.
     posted = client.chat_postMessage(
-        channel=deps.channel_default,
+        channel=user,
         text=f"Deployground: {inputs.stack}",
         blocks=render_progress(inputs.stack, {}, StackState.Requested),
     )
     ts = posted["ts"]
-    channel = posted.get("channel") or deps.channel_default
+    channel = posted.get("channel") or user
     placeholder = StackRecord(
         name=inputs.stack,
         env=inputs.env,
@@ -272,7 +273,7 @@ def handle_extend(deps: Deps, ack: Callable, body: dict[str, Any], client: Any) 
     ack()
     stack, user = _stack_from_action(body), _user(body)
     try:
-        deps.lifecycle.extend(user, stack, EXTEND_BY)
+        result = deps.lifecycle.extend(user, stack, EXTEND_BY)
     except Denied as exc:
         _notify(client, body, str(exc))
         return
@@ -281,7 +282,8 @@ def handle_extend(deps: Deps, ack: Callable, body: dict[str, Any], client: Any) 
         _notify(client, body, f"Extend failed: {GENERIC_ERROR}")
         return
     deps.reaper_ack(stack)
-    _notify(client, body, f"Extended {stack} by {EXTEND_BY}.")
+    pr_text = f"<{result.pr_url}|PR #{result.pr_number}>"
+    _notify(client, body, f"Extended {stack} by {EXTEND_BY}. {pr_text}")
     _refresh_home(deps, client, user)
 
 
@@ -346,7 +348,7 @@ def handle_confirm_destroy(
         _notify(client, body, f"You are not allowed to manage stack {stack!r}.")
         return
     try:
-        deps.lifecycle.destroy(user, stack)
+        result = deps.lifecycle.destroy(user, stack)
     except Denied as exc:
         _notify(client, body, str(exc))
         return
@@ -354,7 +356,8 @@ def handle_confirm_destroy(
         logger.exception("destroy failed for %s", stack)
         _notify(client, body, f"Destroy failed: {GENERIC_ERROR}")
         return
-    _notify(client, body, f"Destroying {stack}.")
+    pr_text = f"<{result.pr_url}|PR #{result.pr_number}>"
+    _notify(client, body, f"Destroying {stack}. {pr_text}")
     _refresh_home(deps, client, user)
 
 
