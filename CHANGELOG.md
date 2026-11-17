@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.11](https://github.com/rhysmcneill/deployground/compare/deployground-v0.6.10...deployground-v0.6.11) (2026-11-17)
+
+
+### Bug Fixes
+
+* **deploytarget:** use {{path}} not {{path.path}} for the files generator directory ([#34](https://github.com/rhysmcneill/deployground/issues/34)) ([a4a9eac](https://github.com/rhysmcneill/deployground/commit/a4a9eac49ac8b24adcb39f99dab64d56e109d3f6))
+
 ## [0.6.10](https://github.com/rhysmcneill/deployground/compare/deployground-v0.6.9...deployground-v0.6.10) (2026-11-17)
 
 
