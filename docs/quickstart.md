@@ -54,7 +54,13 @@ The chart reads the Secret named by `existingSecret` (default `deployground-secr
 (it is rendered to a ConfigMap mounted as `--config`) and optionally pin `image.tag`.
 Multi-arch images (amd64/arm64) are published to `ghcr.io/rhysmcneill/deployground:<version>` on
 each release (the tag defaults to the chart `appVersion`); or build locally with the repo
-`Dockerfile`:
+`Dockerfile`. The chart itself is also published, as an OCI artifact at
+`oci://ghcr.io/rhysmcneill/deployground-chart`:
+
+    helm install deployground oci://ghcr.io/rhysmcneill/deployground-chart --version <version> \
+      -n deployground -f my-values.yaml
+
+or from a local checkout (e.g. a fork, or a specific git ref):
 
     helm install deployground helm/charts/deployground -n deployground -f my-values.yaml
 
