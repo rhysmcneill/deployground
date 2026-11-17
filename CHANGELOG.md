@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.6](https://github.com/rhysmcneill/deployground/compare/deployground-v0.6.5...deployground-v0.6.6) (2026-11-17)
+
+
+### Bug Fixes
+
+* **git:** construct GhApi with sync=True ([#23](https://github.com/rhysmcneill/deployground/issues/23)) ([00d8fde](https://github.com/rhysmcneill/deployground/commit/00d8fde1b7adb65138a5866ece9cd85f9323ca23))
+
 ## [0.6.5](https://github.com/rhysmcneill/deployground/compare/deployground-v0.6.4...deployground-v0.6.5) (2026-11-17)
 
 
