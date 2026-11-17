@@ -59,9 +59,11 @@ class FakeLifecycle:
 
     def extend(self, user, stack, by):
         self.calls.append(("extend", user, stack, by))
+        return SimpleNamespace(pr_url="http://pr/2", pr_number=2, merged=True, expires_at=None)
 
     def destroy(self, user, stack):
         self.calls.append(("destroy", user, stack))
+        return SimpleNamespace(pr_url="http://pr/3", pr_number=3, merged=True)
 
 
 class FakeIndex:
@@ -110,7 +112,6 @@ def make_deps(lifecycle=None, approval=False):
         capability=FakeCapability(approval),
         environments={k: Environment.model_validate(v) for k, v in CFG["environments"].items()},
         reaper_ack=acks.append,
-        channel_default=CHANNEL,
     )
     return deps, acks
 
@@ -231,11 +232,11 @@ def test_submit_posts_message_then_calls_deploy_with_thread_ts():
     actions.handle_submit(deps, ack, _submit_body(), client)
     names = [n for n, _ in client.calls]
     assert names.index("chat_postMessage") < len(names)
-    assert client.named("chat_postMessage")[0]["channel"] == CHANNEL
+    assert client.named("chat_postMessage")[0]["channel"] == "U1"
     deploy = deps.lifecycle.calls[0]
     assert deploy[0] == "deploy"
     assert deploy[3:5] == ("shop", "new-deploy")
-    assert deploy[8] == "111.222" and deploy[9] == CHANNEL
+    assert deploy[8] == "111.222" and deploy[9] == "U1"
     assert deploy[2] == "u@example.com"
     update = client.named("chat_update")[-1]
     assert update["ts"] == "111.222"

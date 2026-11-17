@@ -12,10 +12,9 @@ image:
 # DG_WEBHOOK_TOKEN (statusSource.secretRef) or ARGOCD_TOKEN (statusSource.tokenRef).
 existingSecret: deployground-secrets
 
-# Non-secret environment variables, e.g. DG_DEFAULT_CHANNEL. Do not use the DEPLOYGROUND_
+# Non-secret environment variables, e.g. DG_WEBHOOK_PORT. Do not use the DEPLOYGROUND_
 # prefix here: the config loader treats it as a config override.
 env:
-  DG_DEFAULT_CHANNEL: ""
   DG_WEBHOOK_PORT: "8080"
 
 # Status webhook Service (Argo CD Notifications posts here). The bootstrap ConfigMap assumes

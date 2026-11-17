@@ -4,7 +4,6 @@ Environment variables read here (NOT ``DEPLOYGROUND_*``: the config loader treat
 variable with that prefix as a config override and rejects unknown ones):
 
 - ``SLACK_BOT_TOKEN`` / ``SLACK_APP_TOKEN``: bot token and Socket Mode app token.
-- ``DG_DEFAULT_CHANNEL``: channel where deploy progress threads are posted by default.
 - ``DG_WEBHOOK_PORT``: port of the Argo CD Notifications webhook server (default 8080;
   only used when ``statusSource.type`` is ``argocd-notifications``). The path comes from
   ``statusSource.webhookPath``.
@@ -35,7 +34,7 @@ from deployground.deploytarget import make_deploy_target
 from deployground.git.github import GitHubClient
 from deployground.index import StackIndex
 from deployground.lifecycle.reaper import Reaper
-from deployground.lifecycle.service import LifecycleService
+from deployground.lifecycle.service import DestroyResult, LifecycleService
 from deployground.slack.actions import Deps
 from deployground.slack.membership import SlackMembershipResolver
 from deployground.slack.notifier import SlackNotifier
@@ -78,7 +77,7 @@ class _ForgetOnDestroy:
         except Exception:
             log.warning("could not update thread for %s", record.name, exc_info=True)
 
-    def destroy(self, user: str, stack: str) -> None:
+    def destroy(self, user: str, stack: str) -> DestroyResult:
         record = self._index.get(stack)
         previous = self._bridge.statuses().get(stack)  # None: leave the thread alone on failure
         if record is not None:
@@ -91,10 +90,10 @@ class _ForgetOnDestroy:
             raise
         self._bridge.forget(stack)
         if record is None:
-            return
+            return result
         if result.merged:
             self._show(record, StackState.Destroyed)
-            return
+            return result
         text = f"Destroy PR opened and awaiting review/merge: {result.pr_url}"
         try:
             self._client.chat_postMessage(
@@ -105,6 +104,7 @@ class _ForgetOnDestroy:
             )
         except Exception:
             log.warning("could not post destroy PR notice for %s", record.name, exc_info=True)
+        return result
 
     def __getattr__(self, name: str) -> Any:
         return getattr(self._lifecycle, name)
@@ -257,9 +257,6 @@ def build_app(
         interval,
     )
 
-    channel_default = env.get("DG_DEFAULT_CHANNEL", "")
-    if not channel_default:
-        log.warning("DG_DEFAULT_CHANNEL is not set; deploy threads have no default channel")
     deps = Deps(
         lifecycle=lifecycle,
         catalog=catalog,
@@ -268,7 +265,6 @@ def build_app(
         capability=capability,
         environments=cfg.environments,
         reaper_ack=reaper.acknowledge_warning,
-        channel_default=channel_default,
         statuses=bridge.statuses,
     )
     if slack_app is not None:

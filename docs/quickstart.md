@@ -66,8 +66,10 @@ or from a local checkout (e.g. a fork, or a specific git ref):
 
     helm install deployground helm/charts/deployground -n deployground -f my-values.yaml
 
-Non-secret env: `env.DG_DEFAULT_CHANNEL` (channel ID for deploy threads), `env.DG_WEBHOOK_PORT`
-(default 8080), and optionally `DG_WEBHOOK_HOST` (default `0.0.0.0`). The bot runs as a single
+Non-secret env: `env.DG_WEBHOOK_PORT` (default 8080), and optionally `DG_WEBHOOK_HOST`
+(default `0.0.0.0`). Every deploy's whole lifecycle (progress, completion, extend, destroy)
+lives in the deploying user's own Messages Tab -- there is no shared channel to configure.
+The bot runs as a single
 replica; it rebuilds its in-memory index from Git on startup. Send `SIGHUP` (or restart) to
 reload config; the chart restarts the pod when the config changes.
 

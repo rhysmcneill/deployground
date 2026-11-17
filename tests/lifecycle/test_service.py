@@ -201,7 +201,7 @@ def test_extend_updates_expiry_in_all_component_files():
     record = StackRecord("demo", "demo", "dev", "U1", NOW, "1.1", "C1", comps)
     svc, git, _, index = make_service()
     index.records["demo"] = record
-    svc.extend("U1", "demo", "6h")
+    result = svc.extend("U1", "demo", "6h")
     assert len(git.prs) == 1
     changes = git.prs[0][3]
     assert len(changes) == 2
@@ -211,6 +211,8 @@ def test_extend_updates_expiry_in_all_component_files():
     updated = index.records["demo"]
     new_expiry = NOW + timedelta(hours=6)
     assert updated.expires_at == new_expiry
+    assert result.pr_number == 1
+    assert result.expires_at == new_expiry
     assert all(c.expires_at == new_expiry for c in updated.components.values())
     assert {c.version for c in updated.components.values()} == {"1.0.0", "2.0.0"}
 
