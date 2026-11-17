@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.6.0](https://github.com/rhysmcneill/deployground/compare/deployground-chart-v0.5.5...deployground-chart-v0.6.0) (2026-11-17)
+
+
+### ⚠ BREAKING CHANGES
+
+* **config:** split Catalog from Stack name ([#40](https://github.com/rhysmcneill/deployground/issues/40))
+
+### Features
+
+* **config:** split Catalog from Stack name ([#40](https://github.com/rhysmcneill/deployground/issues/40)) ([009765f](https://github.com/rhysmcneill/deployground/commit/009765fef395192ed226e97f96048dc217b41d72))
+
 ## [0.5.5](https://github.com/rhysmcneill/deployground/compare/deployground-chart-v0.5.4...deployground-chart-v0.5.5) (2026-11-17)
 
 
