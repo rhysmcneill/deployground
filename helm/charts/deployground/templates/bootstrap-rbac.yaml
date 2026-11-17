@@ -5,16 +5,27 @@
 # deployground generates one per environment and the set of names varies with config) — the
 # hook runs `deployground bootstrap --only applicationset` and never touches
 # argocd-notifications-cm; see the comment in bootstrap-job.yaml for why.
+#
+# These three MUST be PreSync hooks themselves, at an earlier sync-wave than the Job
+# (job-bootstrap.yaml, wave "0"): a plain (non-hook) resource is only applied in the main
+# Sync phase, which ArgoCD does not start until every PreSync hook has already succeeded —
+# so the Job's ServiceAccount would not exist yet when the Job tries to run.
 apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: {{ .Release.Name }}-bootstrap
+  annotations:
+    argocd.argoproj.io/hook: PreSync
+    argocd.argoproj.io/sync-wave: "-1"
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
   name: {{ .Release.Name }}-bootstrap
   namespace: {{ .Values.bootstrap.argocdNamespace }}
+  annotations:
+    argocd.argoproj.io/hook: PreSync
+    argocd.argoproj.io/sync-wave: "-1"
 rules:
   - apiGroups: ["argoproj.io"]
     resources: ["applicationsets"]
@@ -25,6 +36,9 @@ kind: RoleBinding
 metadata:
   name: {{ .Release.Name }}-bootstrap
   namespace: {{ .Values.bootstrap.argocdNamespace }}
+  annotations:
+    argocd.argoproj.io/hook: PreSync
+    argocd.argoproj.io/sync-wave: "-1"
 subjects:
   - kind: ServiceAccount
     name: {{ .Release.Name }}-bootstrap

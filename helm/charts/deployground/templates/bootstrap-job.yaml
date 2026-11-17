@@ -54,6 +54,8 @@ spec:
               readOnly: true
             - name: manifests
               mountPath: /manifests
+          resources:
+            {{- toYaml .Values.bootstrap.resources | nindent 12 }}
       containers:
         - name: apply
           image: "{{ .Values.bootstrap.kubectlImage }}"
@@ -62,4 +64,6 @@ spec:
             - name: manifests
               mountPath: /manifests
               readOnly: true
+          resources:
+            {{- toYaml .Values.bootstrap.resources | nindent 12 }}
 {{- end }}
