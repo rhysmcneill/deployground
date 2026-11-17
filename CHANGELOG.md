@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.5](https://github.com/rhysmcneill/deployground/compare/deployground-v0.6.4...deployground-v0.6.5) (2026-11-17)
+
+
+### Bug Fixes
+
+* **deployground-chart:** skip no-op bootstrap applies, slightly raise OOM limit ([#21](https://github.com/rhysmcneill/deployground/issues/21)) ([1b672b4](https://github.com/rhysmcneill/deployground/commit/1b672b43746f89cf6ac1772bf43f7f0e1fd05bc6))
+
 ## [0.6.4](https://github.com/rhysmcneill/deployground/compare/deployground-v0.6.3...deployground-v0.6.4) (2026-11-17)
 
 
