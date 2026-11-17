@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.1](https://github.com/rhysmcneill/deployground/compare/golden-path-chart-v0.4.0...golden-path-chart-v0.4.1) (2026-11-17)
+
+
+### Bug Fixes
+
+* **golden-path-chart:** reference the Ingress backend port by number, not name ([#43](https://github.com/rhysmcneill/deployground/issues/43)) ([e7c292d](https://github.com/rhysmcneill/deployground/commit/e7c292ddc10c3e2b358f011ca05b4338328fbe8a))
+
 ## [0.4.0](https://github.com/rhysmcneill/deployground/compare/golden-path-chart-v0.3.0...golden-path-chart-v0.4.0) (2026-11-17)
 
 

@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.1](https://github.com/rhysmcneill/deployground/compare/deployground-v0.8.0...deployground-v0.8.1) (2026-11-17)
+
+
+### Bug Fixes
+
+* **golden-path-chart:** reference the Ingress backend port by number, not name ([#43](https://github.com/rhysmcneill/deployground/issues/43)) ([e7c292d](https://github.com/rhysmcneill/deployground/commit/e7c292ddc10c3e2b358f011ca05b4338328fbe8a))
+
 ## [0.8.0](https://github.com/rhysmcneill/deployground/compare/deployground-v0.7.0...deployground-v0.8.0) (2026-11-17)
 
 
