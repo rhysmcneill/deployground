@@ -57,7 +57,7 @@ def test_application_cr_per_component_has_labels_metadata_and_subscription_annot
     sources = spec["sources"]
     assert len(sources) == 1
     chart = sources[0]
-    assert chart["repoURL"] == "oci://ghcr.io/rhysmcneill"
+    assert chart["repoURL"] == "ghcr.io/rhysmcneill"
     assert chart["chart"] == "golden-path-chart"
     assert chart["targetRevision"] == deployground.__version__
     values = yaml.safe_load(chart["helm"]["values"])
