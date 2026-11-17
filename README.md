@@ -57,8 +57,8 @@ Access is **default-deny** and scoped by Slack user, usergroup, or channel, per 
 
 ```
 ┌─ New deployment ────────────────┐
-│ Stack:        [ pool-party  ▾ ] │
-│ Environment:  [ homelab     ▾ ] │
+│ Stack:        [ my-stack    ▾ ] │
+│ Environment:  [ dev         ▾ ] │
 │ Expires in:   [ 24h           ] │
 │ Override versions? (optional)   │
 │   ☑ web   → [ v4.6.0        ]   │
