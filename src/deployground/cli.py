@@ -10,7 +10,7 @@ from deployground.config.loader import load_config
 from deployground.deploytarget import make_deploy_target
 
 
-def _bootstrap(config_path: Path) -> int:
+def _bootstrap(config_path: Path, only: str | None) -> int:
     try:
         config = load_config(config_path, os.environ)
     except Exception as exc:
@@ -22,6 +22,14 @@ def _bootstrap(config_path: Path) -> int:
         {name: env.cluster for name, env in config.environments.items()},
     )
     for name, text in target.bootstrap_manifests(config).items():
+        # "applicationset" is the only safe thing to ever auto-apply: it's uniquely
+        # deployground's own resource. argocd-notifications-cm is typically already owned by
+        # however ArgoCD itself is installed (e.g. the argo-cd Helm chart's own `notifications:`
+        # values) — auto-applying it would get silently reverted on that install's next
+        # upgrade. It must be reviewed and merged into that install's own config by hand; see
+        # docs/quickstart.md.
+        if only == "applicationset" and not name.startswith("applicationset-"):
+            continue
         print(f"# --- {name} ---")
         print(text.rstrip("\n"))
         print("---")
@@ -35,12 +43,23 @@ def main(argv: Sequence[str] | None = None) -> int:
         "bootstrap", help="print the Argo CD manifests to review and apply (does not apply them)"
     )
     boot.add_argument("--config", required=True, type=Path, help="path to the YAML config file")
+    boot.add_argument(
+        "--only",
+        choices=["applicationset"],
+        default=None,
+        help=(
+            "print only this kind of manifest. 'applicationset' is the only kind ever safe "
+            "to automate (e.g. pipe into `kubectl apply`) — it never includes "
+            "argocd-notifications-cm, which must be merged into however ArgoCD itself is "
+            "installed, by hand."
+        ),
+    )
     run = sub.add_parser("run", help="run the Slack bot (same as python -m deployground)")
     run.add_argument("--config", required=True, type=Path, help="path to the YAML config file")
     args = parser.parse_args(argv)
 
     if args.command == "bootstrap":
-        return _bootstrap(args.config)
+        return _bootstrap(args.config, args.only)
     from deployground.__main__ import main as run_bot
 
     return run_bot(["--config", str(args.config)])

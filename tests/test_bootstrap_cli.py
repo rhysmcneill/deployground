@@ -20,6 +20,15 @@ def test_bootstrap_emits_manifests_for_config(capsys):
     assert cm["metadata"]["name"] == "argocd-notifications-cm"
 
 
+def test_bootstrap_only_applicationset_omits_notifications_cm(capsys):
+    assert main(["bootstrap", "--config", str(EXAMPLE), "--only", "applicationset"]) == 0
+    out = capsys.readouterr().out
+    assert "# --- applicationset-homelab.yaml ---" in out
+    assert "argocd-notifications-cm" not in out
+    docs = [d for d in yaml.safe_load_all(out) if d]
+    assert {d["kind"] for d in docs} == {"ApplicationSet"}
+
+
 def test_bootstrap_bad_config_exits_2(tmp_path, capsys):
     bad = tmp_path / "bad.yaml"
     bad.write_text("git: {}\n")

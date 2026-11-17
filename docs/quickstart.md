@@ -81,9 +81,22 @@ can review them. Nothing is applied for you:
 For the default `applicationset` target you get one `ApplicationSet` per environment (each
 targets that environment's cluster and watches only its subtree of the component path) and an
 `argocd-notifications-cm` ConfigMap defining the `deployground` webhook service, templates and
-the `on-deployed` / `on-health-degraded` / `on-sync-failed` triggers. Note that applying the
-printed ConfigMap replaces the existing `argocd-notifications-cm`, so merge it with any
-existing notification config first.
+the `on-deployed` / `on-health-degraded` / `on-sync-failed` triggers.
+
+**The notifications ConfigMap is never something to `kubectl apply` directly, and never
+something the chart automates** — `argocd-notifications-cm` is normally already owned by
+however you installed Argo CD itself (e.g. the `argo-cd` Helm chart's own `notifications:`
+values). Applying it separately would work until the next time you upgrade that install,
+which would silently wipe your changes back out. Merge its `data` keys into that install's own
+config instead — once; re-merge only if you change `statusSource`/triggers later.
+
+The `ApplicationSet` has no such owner (it's uniquely deployground's own resource), so it's
+safe to apply directly, and the chart can do it for you: set `bootstrap.enabled: true` to run
+`deployground bootstrap --only applicationset` as a PreSync hook on every sync, via a
+dedicated, narrowly-scoped ServiceAccount (create/update on ApplicationSets only — the bot's
+own pod is never granted this). It's off by default: review the ApplicationSet by hand once
+before turning it on, since enabling it means no human reviews it before each apply
+thereafter.
 
 The default workload chart is published at `oci://ghcr.io/rhysmcneill/golden-path-chart` and is
 pulled automatically — no manual copy into the target GitOps repo is needed. Point

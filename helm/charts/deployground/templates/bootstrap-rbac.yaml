@@ -1,0 +1,36 @@
+{{- if .Values.bootstrap.enabled }}
+# Dedicated identity for the PreSync bootstrap hook (job-bootstrap.yaml). Never used by the
+# bot's own long-running pod — that one still never gets cluster-write access, per the
+# project's core design. Scoped to ApplicationSets ONLY (no resourceNames, because
+# deployground generates one per environment and the set of names varies with config) — the
+# hook runs `deployground bootstrap --only applicationset` and never touches
+# argocd-notifications-cm; see the comment in bootstrap-job.yaml for why.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ .Release.Name }}-bootstrap
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ .Release.Name }}-bootstrap
+  namespace: {{ .Values.bootstrap.argocdNamespace }}
+rules:
+  - apiGroups: ["argoproj.io"]
+    resources: ["applicationsets"]
+    verbs: ["get", "list", "watch", "create", "update", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ .Release.Name }}-bootstrap
+  namespace: {{ .Values.bootstrap.argocdNamespace }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ .Release.Name }}-bootstrap
+    namespace: {{ .Release.Namespace }}
+roleRef:
+  kind: Role
+  name: {{ .Release.Name }}-bootstrap
+  apiGroup: rbac.authorization.k8s.io
+{{- end }}
