@@ -34,6 +34,9 @@ spec:
     spec:
       serviceAccountName: {{ .Release.Name }}-bootstrap
       restartPolicy: Never
+      # See the same setting on the main Deployment: avoids Service-link env vars that
+      # collide with the config loader's DEPLOYGROUND_ override convention.
+      enableServiceLinks: false
       volumes:
         - name: config
           configMap:

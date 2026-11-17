@@ -147,7 +147,7 @@ def test_bootstrap_applicationset_templates_labels_annotations_and_subscription(
     assert appset["kind"] == "ApplicationSet"
 
     gen = appset["spec"]["generators"][0]["git"]
-    assert gen["repoURL"] == "https://github.com/acme/deploys.git"
+    assert gen["repoURL"] == "git@github.com:acme/deploys.git"
     assert gen["revision"] == "main"
     assert gen["files"] == [{"path": "dev/*/*/config.yaml"}]
 
@@ -175,7 +175,7 @@ def test_bootstrap_applicationset_templates_labels_annotations_and_subscription(
     assert chart["repoURL"] == "oci://ghcr.io/rhysmcneill/golden-path-chart"
     assert chart["targetRevision"] == deployground.__version__
     assert chart["helm"]["valueFiles"] == ["$values/{{path.path}}/{{path.filename}}"]
-    assert values_ref["repoURL"] == "https://github.com/acme/deploys.git"
+    assert values_ref["repoURL"] == "git@github.com:acme/deploys.git"
     assert values_ref["targetRevision"] == "main"
     assert values_ref["ref"] == "values"
 
