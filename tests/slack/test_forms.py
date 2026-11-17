@@ -31,7 +31,7 @@ CFG = {
         }
         for e in ("dev", "staging", "prod")
     },
-    "stacks": {
+    "catalog": {
         "shop": {
             "components": {
                 "web": {"image": "i/web", "defaultVersion": "v2.0.0"},
@@ -65,10 +65,10 @@ class FakeAuthz:
 
 def catalog(n_extra=0):
     cfg = dict(CFG)
-    stacks = dict(CFG["stacks"])
+    entries = dict(CFG["catalog"])
     for i in range(n_extra):
-        stacks[f"s{i:03d}"] = {"components": {"c": {"image": "i/c", "defaultVersion": "v1"}}}
-    cfg["stacks"] = stacks
+        entries[f"s{i:03d}"] = {"components": {"c": {"image": "i/c", "defaultVersion": "v1"}}}
+    cfg["catalog"] = entries
     return Catalog(lambda: Config.model_validate(cfg))
 
 
@@ -76,15 +76,22 @@ def block(view, block_id):
     return next(b for b in view["blocks"] if b.get("block_id") == block_id)
 
 
-def state(stack="shop", env="dev", ttl="24h", overrides=None):
+def _text(value):
+    return {ACTION_ID: {"type": "plain_text_input", "value": value}}
+
+
+def state(catalog="shop", env="dev", ttl="24h", overrides=None, name="pr-123"):
     s = {}
-    if stack is not None:
-        s["stack"] = {ACTION_ID: {"type": "static_select", "selected_option": {"value": stack}}}
+    if catalog is not None:
+        s["catalog"] = {
+            ACTION_ID: {"type": "static_select", "selected_option": {"value": catalog}}
+        }
     if env is not None:
         s["env"] = {ACTION_ID: {"type": "static_select", "selected_option": {"value": env}}}
-    s["ttl"] = {ACTION_ID: {"type": "plain_text_input", "value": ttl}}
-    for name, v in (overrides or {}).items():
-        s[f"override::{name}"] = {ACTION_ID: {"type": "plain_text_input", "value": v}}
+    s["ttl"] = _text(ttl)
+    s["stack"] = _text(name)
+    for comp_name, v in (overrides or {}).items():
+        s[f"override::{comp_name}"] = _text(v)
     return s
 
 
@@ -95,16 +102,32 @@ def test_modal_lists_only_allowed_envs():
     assert [o["value"] for o in opts] == ["dev", "prod"]
 
 
-def test_stack_picker_uses_external_select_over_100():
-    small = block(build_deploy_modal("U1", catalog(), FakeAuthz({"dev"})), "stack")
+def test_catalog_picker_uses_external_select_over_100():
+    small = block(build_deploy_modal("U1", catalog(), FakeAuthz({"dev"})), "catalog")
     assert small["element"]["type"] == "static_select"
-    big = block(build_deploy_modal("U1", catalog(STATIC_SELECT_LIMIT), FakeAuthz({"dev"})), "stack")
+    big = block(
+        build_deploy_modal("U1", catalog(STATIC_SELECT_LIMIT), FakeAuthz({"dev"})), "catalog"
+    )
     assert big["element"]["type"] == "external_select"
 
 
+def test_stack_name_is_a_plain_text_input_with_hint():
+    view = build_deploy_modal("U1", catalog(), FakeAuthz({"dev"}))
+    stack_block = block(view, "stack")
+    assert stack_block["element"]["type"] == "plain_text_input"
+    assert "hint" in stack_block
+
+
+def test_override_picker_and_blocks_sit_between_catalog_and_stack_name():
+    prefill = DeployInputs(catalog="shop", stack="pr-123", env="dev", overrides={"web": "v9"}, ttl="2h")
+    view = build_deploy_modal("U1", catalog(), FakeAuthz({"dev"}), prefill)
+    block_ids = [b.get("block_id") for b in view["blocks"] if b.get("block_id")]
+    assert block_ids == ["catalog", "override_components", "override::web", "stack", "env", "ttl"]
+
+
 def test_override_blocks_only_for_selected_prefilled_to_default():
-    stack = catalog().get("shop")
-    blocks = build_override_blocks(stack, ["worker"])
+    entry = catalog().get("shop")
+    blocks = build_override_blocks(entry, ["worker"])
     assert [b["block_id"] for b in blocks] == ["override::worker"]
     assert blocks[0]["element"]["initial_value"] == "v3.0.0"
     assert blocks[0]["element"]["action_id"] == ACTION_ID
@@ -116,9 +139,10 @@ def test_expires_in_defaults_to_24h():
 
 
 def test_prefill_populates_fields():
-    prefill = DeployInputs("shop", "prod", {"web": "v9"}, "2h")
+    prefill = DeployInputs(catalog="shop", stack="pr-123", env="prod", overrides={"web": "v9"}, ttl="2h")
     view = build_deploy_modal("U1", catalog(), FakeAuthz({"dev", "prod"}), prefill)
-    assert block(view, "stack")["element"]["initial_option"]["value"] == "shop"
+    assert block(view, "catalog")["element"]["initial_option"]["value"] == "shop"
+    assert block(view, "stack")["element"]["initial_value"] == "pr-123"
     assert block(view, "env")["element"]["initial_option"]["value"] == "prod"
     assert block(view, "ttl")["element"]["initial_value"] == "2h"
     picked = block(view, "override_components")["element"]["initial_options"]
@@ -129,18 +153,39 @@ def test_prefill_populates_fields():
 def test_parse_submission_extracts_overrides_and_ttl():
     inputs, errors = parse_submission(state(ttl=" 2h ", overrides={"web": " v9 "}))
     assert errors == {}
-    assert inputs == DeployInputs("shop", "dev", {"web": "v9"}, "2h")
+    assert inputs == DeployInputs(
+        catalog="shop", stack="pr-123", env="dev", overrides={"web": "v9"}, ttl="2h"
+    )
     inputs, _ = parse_submission(state(ttl="none"))
     assert inputs.ttl == "none" and inputs.overrides == {}
 
 
 def test_parse_submission_returns_inline_errors_for_bad_input():
-    bad = state(stack=None, env=None, ttl="soon", overrides={"web": "  "})
+    bad = state(catalog=None, env=None, ttl="soon", overrides={"web": "  "})
     inputs, errors = parse_submission(bad)
     assert inputs is None
-    assert set(errors) == {"stack", "env", "ttl", "override::web"}
+    assert set(errors) == {"catalog", "env", "ttl", "override::web"}
     _, errors = parse_submission(state(ttl=""))
     assert set(errors) == {"ttl"}
+
+
+def test_parse_submission_rejects_invalid_stack_name():
+    inputs, errors = parse_submission(state(name="Not Valid!"))
+    assert inputs is None
+    assert "stack" in errors
+
+
+def test_parse_submission_accepts_valid_stack_name():
+    inputs, errors = parse_submission(state(name="pr-123"))
+    assert errors == {}
+    assert inputs.stack == "pr-123"
+    assert inputs.catalog == "shop"
+
+
+def test_parse_submission_rejects_empty_stack_name():
+    inputs, errors = parse_submission(state(name=""))
+    assert inputs is None
+    assert "stack" in errors
 
 
 def test_empty_envs_view_has_no_inputs_and_no_submit():
@@ -149,8 +194,8 @@ def test_empty_envs_view_has_no_inputs_and_no_submit():
     assert "submit" not in view
 
 
-def test_stack_and_override_picker_dispatch_actions():
-    prefill = DeployInputs("shop", "dev", {"web": "v9"}, "2h")
+def test_catalog_and_override_picker_dispatch_actions():
+    prefill = DeployInputs(catalog="shop", stack="pr-123", env="dev", overrides={"web": "v9"}, ttl="2h")
     view = build_deploy_modal("U1", catalog(), FakeAuthz({"dev"}), prefill)
-    assert block(view, "stack")["dispatch_action"] is True
+    assert block(view, "catalog")["dispatch_action"] is True
     assert block(view, "override_components")["dispatch_action"] is True
