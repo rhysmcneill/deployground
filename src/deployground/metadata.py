@@ -34,6 +34,7 @@ class InvalidMetadata(ValueError):
 @dataclass(frozen=True)
 class ComponentRecord:
     stack: str
+    catalog: str
     component: str
     owner: str
     owner_email: str
@@ -47,6 +48,7 @@ class ComponentRecord:
 @dataclass
 class StackRecord:
     name: str
+    catalog: str
     env: str
     owner: str
     expires_at: datetime | None
@@ -96,6 +98,7 @@ def to_metadata_block(record: ComponentRecord) -> dict[str, Any]:
     """Serialize a record to the dict stored under a component file's `deployground:` key."""
     return {
         "stack": record.stack,
+        "catalog": record.catalog,
         "component": record.component,
         "owner": record.owner,
         "ownerEmail": record.owner_email,
@@ -127,6 +130,10 @@ def _record_from_block(block: Any) -> ComponentRecord:
         if not isinstance(block[key], str):
             raise InvalidMetadata(f"{key} must be a string")
 
+    catalog_value = block.get("catalog", block["stack"])
+    if not isinstance(catalog_value, str):
+        raise InvalidMetadata("catalog must be a string")
+
     expires_value = block["expiresAt"]
     if expires_value is not None and not isinstance(expires_value, str | datetime):
         raise InvalidMetadata("expiresAt must be a string, a timestamp or null")
@@ -134,6 +141,7 @@ def _record_from_block(block: Any) -> ComponentRecord:
 
     return ComponentRecord(
         stack=block["stack"],
+        catalog=catalog_value,
         component=block["component"],
         owner=block["owner"],
         owner_email=block["ownerEmail"],
@@ -150,6 +158,7 @@ def to_annotations(record: ComponentRecord) -> dict[str, str]:
     expires = _format_expiry(record.expires_at)
     return {
         f"{ANNOTATION_PREFIX}stack": record.stack,
+        f"{ANNOTATION_PREFIX}catalog": record.catalog,
         f"{ANNOTATION_PREFIX}component": record.component,
         f"{ANNOTATION_PREFIX}owner": record.owner,
         f"{ANNOTATION_PREFIX}owner-email": record.owner_email,
@@ -164,6 +173,7 @@ def to_annotations(record: ComponentRecord) -> dict[str, str]:
 # annotation suffix -> `deployground:` block key
 _ANNOTATION_TO_BLOCK = {
     "stack": "stack",
+    "catalog": "catalog",
     "component": "component",
     "owner": "owner",
     "owner-email": "ownerEmail",
@@ -186,6 +196,8 @@ def from_annotations(annotations: Any) -> ComponentRecord:
             block[key] = value
     if block.get("expiresAt") == NO_EXPIRY:
         block["expiresAt"] = None
+    if "catalog" not in block and "stack" in block:
+        block["catalog"] = block["stack"]
     return _record_from_block(block)
 
 
