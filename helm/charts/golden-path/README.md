@@ -25,9 +25,16 @@ deployTarget:
 ```
 
 It consumes the workload keys of one component file: `image`, `port`, `replicas`,
-`ingressHost`, `env` (map), `secretRefs` (list of Secret names, injected via `envFrom`).
-The `deployground:` metadata block in the file is ignored. Renders a Deployment, a Service (when
-`port` is set) and an Ingress (when `port` and `ingressHost` are set).
+`ingressHost`, `env` (map), `secretRefs` (list of Secret names, injected via `envFrom`),
+`imagePullSecrets` (list of pre-existing `kubernetes.io/dockerconfigjson` Secret names, wired
+onto the pod spec so kubelet can pull from a private registry) and `serviceAccountName` (a
+pre-existing ServiceAccount, e.g. annotated for IRSA, that the pod runs under so the
+workload's own code can call AWS APIs at runtime — this does NOT help pull private images,
+since kubelet pulls the image before any pod-runtime mechanism like IRSA is available; for
+ECR specifically there are also node-level and image-credential-provider mechanisms outside
+this chart's scope). The `deployground:` metadata block in the file is ignored. Renders a
+Deployment, a Service (when `port` is set) and an Ingress (when `port` and `ingressHost` are
+set).
 
 Resource requests/limits come from this chart's `values.yaml` defaults, not from component files.
 Edit them there to change the platform-wide defaults.

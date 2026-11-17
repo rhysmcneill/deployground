@@ -89,6 +89,10 @@ class ApplicationTarget:
             values["env"] = dict(comp.env)
         if comp.secretRefs:
             values["secretRefs"] = list(comp.secretRefs)
+        if comp.imagePullSecrets:
+            values["imagePullSecrets"] = list(comp.imagePullSecrets)
+        if comp.serviceAccountName:
+            values["serviceAccountName"] = comp.serviceAccountName
         # Literal manifest (no Go-template vars): the chart source is resolved once here
         # from config, same defaulting as the ApplicationSet target. Values are already
         # known in full, so they stay inline on the chart source's `helm.values` rather

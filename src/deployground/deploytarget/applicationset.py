@@ -73,6 +73,10 @@ class ApplicationSetTarget:
                 data["env"] = dict(comp.env)
             if comp.secretRefs:
                 data["secretRefs"] = list(comp.secretRefs)
+            if comp.imagePullSecrets:
+                data["imagePullSecrets"] = list(comp.imagePullSecrets)
+            if comp.serviceAccountName:
+                data["serviceAccountName"] = comp.serviceAccountName
             data[BLOCK_KEY] = to_metadata_block(records[name])
             changes.append(
                 FileChange(

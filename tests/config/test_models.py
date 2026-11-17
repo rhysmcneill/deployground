@@ -66,6 +66,23 @@ def test_minimal_valid_config_parses():
     assert parse_duration(cfg.lifecycle.reaperInterval) == timedelta(minutes=1)
 
 
+def test_component_image_pull_secrets_and_service_account_default_empty():
+    cfg = Config.model_validate(VALID)
+    comp = cfg.stacks["api"].components["api"]
+    assert comp.imagePullSecrets == []
+    assert comp.serviceAccountName is None
+
+
+def test_component_image_pull_secrets_and_service_account_round_trip():
+    data = make()
+    data["stacks"]["api"]["components"]["api"]["imagePullSecrets"] = ["harbor-pull"]
+    data["stacks"]["api"]["components"]["api"]["serviceAccountName"] = "my-irsa-sa"
+    cfg = Config.model_validate(data)
+    comp = cfg.stacks["api"].components["api"]
+    assert comp.imagePullSecrets == ["harbor-pull"]
+    assert comp.serviceAccountName == "my-irsa-sa"
+
+
 def test_rule_requires_exactly_one_principal():
     with pytest.raises(ValidationError):
         Config.model_validate(make(access={"rules": [{"user": "U1", "group": "S1"}]}))
