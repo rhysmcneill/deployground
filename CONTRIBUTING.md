@@ -16,8 +16,8 @@ Requires Python 3.12+.
 
 If you touch the charts, also run (needs [Helm](https://helm.sh)):
 
-    helm lint helm/deployground
-    helm lint charts/golden-path --set image=ghcr.io/my-org/app:v1.0.0
+    helm lint helm/charts/deployground
+    helm lint helm/charts/golden-path --set image=ghcr.io/my-org/app:v1.0.0
 
 Write a failing test first for behaviour changes. Tests run without network: Slack, Git and Argo
 CD are injected as fakes.

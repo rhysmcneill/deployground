@@ -30,11 +30,11 @@
       "changelog-path": "CHANGELOG.md",
       "extra-files": ["src/deployground/__init__.py"]
     },
-    "charts/golden-path": {
+    "helm/charts/golden-path": {
       "release-type": "helm",
       "package-name": "golden-path",
       "component": "golden-path",
-      "changelog-path": "charts/golden-path/CHANGELOG.md"
+      "changelog-path": "helm/charts/golden-path/CHANGELOG.md"
     }
   }
 }

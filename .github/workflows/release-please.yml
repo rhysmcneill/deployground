@@ -114,7 +114,7 @@ jobs:
 
       - name: Package golden-path chart
         run: |
-          helm package charts/golden-path \
+          helm package helm/charts/golden-path \
             --version "${{ steps.version.outputs.VERSION }}" \
             --app-version "${{ steps.version.outputs.VERSION }}" \
             --destination .

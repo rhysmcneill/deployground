@@ -56,7 +56,7 @@ Multi-arch images (amd64/arm64) are published to `ghcr.io/rhysmcneill/deploygrou
 each release (the tag defaults to the chart `appVersion`); or build locally with the repo
 `Dockerfile`:
 
-    helm install deployground helm/deployground -n deployground -f my-values.yaml
+    helm install deployground helm/charts/deployground -n deployground -f my-values.yaml
 
 Non-secret env: `env.DG_DEFAULT_CHANNEL` (channel ID for deploy threads), `env.DG_WEBHOOK_PORT`
 (default 8080), and optionally `DG_WEBHOOK_HOST` (default `0.0.0.0`). The bot runs as a single
@@ -82,7 +82,7 @@ existing notification config first.
 The default workload chart is published at `oci://ghcr.io/rhysmcneill/golden-path` and is
 pulled automatically — no manual copy into the target GitOps repo is needed. Point
 `deployTarget.workloadChart` at your own chart (`type: oci` or `type: git`) to use a different
-one; see `charts/golden-path/README.md`.
+one; see `helm/charts/golden-path/README.md`.
 
 The webhook URL in the ConfigMap is `<statusSource.webhookUrl><webhookPath>`; see section 5 for
 `webhookUrl` (it defaults to the in-cluster Service DNS for release `deployground` in namespace

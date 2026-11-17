@@ -34,4 +34,4 @@ Edit them there to change the platform-wide defaults.
 
 Try it locally:
 
-    helm template pool-party-web charts/golden-path -f path/to/component/config.yaml
+    helm template pool-party-web helm/charts/golden-path -f path/to/component/config.yaml

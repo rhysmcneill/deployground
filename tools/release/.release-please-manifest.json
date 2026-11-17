@@ -1,4 +1,4 @@
 {
   ".": "0.2.0",
-  "charts/golden-path": "0.1.0"
+  "helm/charts/golden-path": "0.1.0"
 }
