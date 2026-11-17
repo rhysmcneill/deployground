@@ -69,7 +69,7 @@ bootstrap:
   kubectlImage: "alpine/k8s:1.31.3"
   resources:
     requests: { cpu: 10m, memory: 32Mi }
-    limits: { memory: 64Mi }
+    limits: { memory: 96Mi }
 
 podAnnotations: {}
 nodeSelector: {}

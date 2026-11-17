@@ -62,7 +62,19 @@ spec:
       containers:
         - name: apply
           image: "{{ .Values.bootstrap.kubectlImage }}"
-          command: ["kubectl", "apply", "-f", "/manifests/bootstrap.yaml"]
+          # --server-side avoids downloading/caching the full client-side OpenAPI schema,
+          # and most syncs change nothing here, so skip the apply entirely when the live
+          # ApplicationSet already matches what we'd apply.
+          command:
+            - sh
+            - -c
+            - |
+              if kubectl get -f /manifests/bootstrap.yaml >/dev/null 2>&1 \
+                && kubectl diff --server-side -f /manifests/bootstrap.yaml >/dev/null 2>&1; then
+                echo "ApplicationSet already up to date, skipping apply"
+              else
+                kubectl apply --server-side -f /manifests/bootstrap.yaml
+              fi
           volumeMounts:
             - name: manifests
               mountPath: /manifests
