@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.1](https://github.com/rhysmcneill/deployground/compare/deployground-chart-v0.5.0...deployground-chart-v0.5.1) (2026-11-17)
+
+
+### Bug Fixes
+
+* **deployground-chart:** bootstrap hook ordering and missing resources ([#13](https://github.com/rhysmcneill/deployground/issues/13)) ([db495c1](https://github.com/rhysmcneill/deployground/commit/db495c17150373ebae967ff1bff92f36093c9fe3))
+
 ## [0.5.0](https://github.com/rhysmcneill/deployground/compare/deployground-chart-v0.4.0...deployground-chart-v0.5.0) (2026-11-17)
 
 
