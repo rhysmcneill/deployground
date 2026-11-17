@@ -66,7 +66,7 @@ class RepoFakeGit:
 
 def config():
     data = deepcopy(VALID)
-    data["stacks"]["pool-party"] = {
+    data["catalog"]["pool-party"] = {
         "components": {
             name: {"image": f"ghcr.io/my-org/{name}", "defaultVersion": "v1.0.0", "port": 80}
             for name in ("web", "worker", "db")
@@ -96,7 +96,8 @@ def ack(*_a, **_kw):
 
 def submit(app, slack, stack, overrides=None, ttl="24h"):
     values = {
-        "stack": {"val": {"selected_option": {"value": stack}}},
+        "catalog": {"val": {"selected_option": {"value": stack}}},
+        "stack": {"val": {"value": stack}},
         "env": {"val": {"selected_option": {"value": "homelab"}}},
         "ttl": {"val": {"value": ttl}},
     }
