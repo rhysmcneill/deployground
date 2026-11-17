@@ -200,11 +200,21 @@ class LifecycleService:
         components = {
             name: replace(comp, expires_at=new_expiry) for name, comp in record.components.items()
         }
+        # Only components still present in the catalog are regenerated: a component the
+        # catalog has since dropped is kept in the record (with its expiry pushed out
+        # above) but not resolved, since resolve_versions treats an unknown override name
+        # as a typo and raises -- correct for a fresh deploy's user-supplied overrides,
+        # wrong here, where the names come from what's already live, not user input.
+        catalog_components = self._ctx.catalog.get(stack).components
+        still_cataloged = {name: c for name, c in components.items() if name in catalog_components}
         resolved = self._ctx.catalog.resolve_versions(
-            stack, {name: comp.version for name, comp in components.items()}
+            stack, {name: comp.version for name, comp in still_cataloged.items()}
         )
-        # Only components still present in the catalog are regenerated.
-        resolved = {name: resolved[name] for name in components if name in resolved}
+        # resolve_versions resolves every catalog-defined component regardless of which
+        # names were in overrides, so narrow it back down to just the live, still-cataloged
+        # ones -- otherwise an unrelated catalog component with no live record would also
+        # get (re)generated here.
+        resolved = {name: resolved[name] for name in still_cataloged}
         changes = self._ctx.deploy_target.files_for(stack, record.env, resolved, components)
         env_cfg = self._environments[record.env]
         self._open_pr(
