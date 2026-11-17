@@ -193,6 +193,26 @@ def test_extend_updates_expiry_in_all_component_files():
     assert {c.version for c in updated.components.values()} == {"1.0.0", "2.0.0"}
 
 
+def test_extend_tolerates_a_component_dropped_from_the_catalog():
+    # "legacy" was live under the old catalog shape; the catalog has since been edited to
+    # no longer define it (e.g. a component renamed). It must not block extending the
+    # component(s) that are still cataloged.
+    comps = {
+        n: ComponentRecord("demo", n, "U1", "a@example.com", "dev", NOW, v, "1.1", "C1")
+        for n, v in (("api", "1.0.0"), ("legacy", "9.9.9"))
+    }
+    record = StackRecord("demo", "dev", "U1", NOW, "1.1", "C1", comps)
+    svc, git, _, index = make_service()
+    index.records["demo"] = record
+    svc.extend("U1", "demo", "6h")
+    changes = git.prs[0][3]
+    assert len(changes) == 1  # only "api" is still cataloged and regenerated
+    new_expiry = NOW + timedelta(hours=6)
+    updated = index.records["demo"]
+    assert updated.components["legacy"].expires_at == new_expiry  # kept, not regenerated
+    assert updated.components["legacy"].version == "9.9.9"
+
+
 def test_extend_without_expiry_denied():
     record = StackRecord("demo", "dev", "U1", None, "1.1", "C1")
     svc, git, _, index = make_service()
