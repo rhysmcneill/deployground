@@ -10,6 +10,8 @@ from typing import Annotated, Literal, Self
 
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, model_validator
 
+from deployground.metadata import RESERVED_COMPONENT
+
 _DURATION_RE = re.compile(r"^(\d+)([smh])$")
 _UNITS = {"s": "seconds", "m": "minutes", "h": "hours"}
 
@@ -88,6 +90,12 @@ class Component(_Model):
 
 class CatalogEntry(_Model):
     components: dict[str, Component]
+
+    @model_validator(mode="after")
+    def _no_reserved_component_name(self) -> Self:
+        if RESERVED_COMPONENT in self.components:
+            raise ValueError(f"component name {RESERVED_COMPONENT!r} is reserved")
+        return self
 
 
 class CapabilityCfg(_Model):
