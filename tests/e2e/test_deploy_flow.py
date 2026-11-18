@@ -22,7 +22,7 @@ from tests.test_startup import FakeSlack, ScriptedSource
 USER = "U012ABC"
 CHANNEL = "C-DEPLOYS"
 _ts = itertools.count(1)  # unique thread ts per post: update_thread dedupes per (channel, ts)
-POOL_FILES = {f"homelab/pool-party/{n}/config.yaml" for n in ("web", "worker", "db")}
+POOL_FILES = {f"homelab/pool-party/{n}/config.yaml" for n in ("web", "worker", "db", "_system")}
 
 
 class E2ESlack(FakeSlack):
@@ -126,7 +126,7 @@ def test_single_service_deploy_to_healthy():
 
         assert len(git.prs) == 1
         files = files_of(git.prs[0]["changes"])
-        assert list(files) == ["homelab/api/api/config.yaml"]
+        assert sorted(files) == ["homelab/api/_system/config.yaml", "homelab/api/api/config.yaml"]
         block = files["homelab/api/api/config.yaml"]["deployground"]
         assert block["stack"] == "api" and block["owner"] == USER
         assert block["ownerEmail"] == "owner@example.com"
@@ -154,7 +154,11 @@ def test_stack_with_overrides():
         assert len(git.prs) == 1
         files = files_of(git.prs[0]["changes"])
         assert set(files) == POOL_FILES
-        versions = {p.split("/")[2]: f["deployground"]["version"] for p, f in files.items()}
+        versions = {
+            p.split("/")[2]: f["deployground"]["version"]
+            for p, f in files.items()
+            if p.split("/")[2] != "_system"
+        }
         assert versions == {"web": "v9.9.9", "db": "v2.0.0", "worker": "v1.0.0"}
         dumped = {p.split("/")[2]: yaml.safe_dump(f) for p, f in files.items()}
         assert "ghcr.io/my-org/web:v9.9.9" in dumped["web"]

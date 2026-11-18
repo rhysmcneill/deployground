@@ -70,6 +70,7 @@ def make_inputs(**kw) -> RenderInputs:
 def test_render_emits_all_component_files_in_one_batch():
     changes = ImageDeployCapability().render(make_inputs(), make_ctx())
     assert sorted(c.path for c in changes) == [
+        "dev/demo/_system/config.yaml",
         "dev/demo/api/config.yaml",
         "dev/demo/web/config.yaml",
     ]
@@ -100,10 +101,13 @@ def test_render_resolves_versions_from_catalog_not_stack_name():
     )
     by_path = {c.path: yaml.safe_load(c.content) for c in changes}
     assert sorted(by_path) == [
+        "dev/pr-123/_system/config.yaml",
         "dev/pr-123/api/config.yaml",
         "dev/pr-123/web/config.yaml",
     ]
     for path in by_path:
+        if path == "dev/pr-123/_system/config.yaml":
+            continue
         record = parse_metadata_block(by_path[path])
         assert record.stack == "pr-123"
         assert record.catalog == "demo"
@@ -150,6 +154,7 @@ def test_destroy_emits_delete_for_all_components():
     )
     changes = ImageDeployCapability().destroy(stack, make_ctx())
     assert sorted(c.path for c in changes) == [
+        "dev/demo/_system/config.yaml",
         "dev/demo/api/config.yaml",
         "dev/demo/web/config.yaml",
     ]
