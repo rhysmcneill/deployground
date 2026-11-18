@@ -21,6 +21,7 @@ CFG = DeployTargetCfg(
     type="application", repo="deploys", pathTemplate="{env}/{stack}/{component}/app.yaml"
 )
 CLUSTERS = {"dev": "dev-cluster", "prod": "prod-eks"}
+SYSTEM_PATH = "dev/demo/_system/app.yaml"
 
 
 def make_files(env="dev"):
@@ -31,7 +32,8 @@ def make_files(env="dev"):
 
 def test_application_cr_per_component_has_labels_metadata_and_subscription_annotations():
     changes = make_files()
-    assert sorted(c.path for c in changes) == [f"dev/demo/{n}/app.yaml" for n in NAMES]
+    expected = sorted([f"dev/demo/{n}/app.yaml" for n in NAMES] + [SYSTEM_PATH])
+    assert sorted(c.path for c in changes) == expected
     by_path = {c.path: yaml.safe_load(c.content) for c in changes}
     app = by_path["dev/demo/api/app.yaml"]
     assert app["apiVersion"] == "argoproj.io/v1alpha1"
@@ -126,9 +128,36 @@ def test_unknown_env_raises():
 def test_delete_and_bootstrap():
     target = ApplicationTarget(CFG, REPO, CLUSTERS)
     deletes = target.delete_files_for("demo", "dev", NAMES)
-    assert sorted(c.path for c in deletes) == [f"dev/demo/{n}/app.yaml" for n in NAMES]
+    expected = sorted([f"dev/demo/{n}/app.yaml" for n in NAMES] + [SYSTEM_PATH])
+    assert sorted(c.path for c in deletes) == expected
     assert all(c.content is None for c in deletes)
     assert set(target.bootstrap_manifests(make_config())) == {"argocd-notifications-cm.yaml"}
+
+
+def test_files_for_also_writes_the_reserved_system_application():
+    changes = make_files()
+    system_changes = [c for c in changes if c.path == SYSTEM_PATH]
+    assert len(system_changes) == 1
+    app = yaml.safe_load(system_changes[0].content)
+    assert app["kind"] == "Application"
+    assert app["metadata"]["name"] == "demo-_system"
+    values = yaml.safe_load(app["spec"]["sources"][0]["helm"]["values"])
+    assert values == {"namespaceOnly": True}
+    annotations = app["metadata"]["annotations"]
+    assert annotations["deployground.io/component"] == "_system"
+    assert annotations["deployground.io/stack"] == "demo"
+    assert annotations["deployground.io/owner"] == record("api").owner
+    assert annotations["deployground.io/version"] == ""
+
+
+def test_delete_files_also_removes_the_reserved_system_application():
+    # _system is never in component_names (StackRecord.components excludes it), but
+    # delete_files_for must still emit its removal unconditionally.
+    changes = ApplicationTarget(CFG, REPO, CLUSTERS).delete_files_for("demo", "dev", NAMES)
+    system_changes = [c for c in changes if c.path == SYSTEM_PATH]
+    assert len(system_changes) == 1
+    assert system_changes[0].content is None
+    assert system_changes[0].repo == REPO
 
 
 def test_index_rebuilds_from_application_files():

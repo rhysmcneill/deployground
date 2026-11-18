@@ -7,6 +7,7 @@ annotations back (see `metadata.parse_component_file`); no `deployground:` key i
 at the top level because that would make the manifest invalid.
 """
 
+from dataclasses import replace
 from typing import Any
 
 import yaml
@@ -20,6 +21,7 @@ from deployground.metadata import (
     LABEL_COMPONENT,
     LABEL_MANAGED,
     LABEL_STACK,
+    RESERVED_COMPONENT,
     ComponentRecord,
     to_annotations,
 )
@@ -47,7 +49,7 @@ class ApplicationTarget:
         records: dict[str, ComponentRecord],
     ) -> list[FileChange]:
         cluster = self._env_clusters[env]
-        return [
+        changes = [
             FileChange(
                 repo=self._repo_ref,
                 path=self._path(stack, env, name),
@@ -57,19 +59,77 @@ class ApplicationTarget:
             )
             for name, comp in components.items()
         ]
+        if records:
+            base = next(iter(records.values()))
+            system_record = replace(base, component=RESERVED_COMPONENT, version="")
+            changes.append(
+                FileChange(
+                    repo=self._repo_ref,
+                    path=self._path(stack, env, RESERVED_COMPONENT),
+                    content=yaml.safe_dump(
+                        self._namespace_application(stack, cluster, system_record),
+                        sort_keys=False,
+                    ),
+                )
+            )
+        return changes
 
     def delete_files_for(
         self, stack: str, env: str, component_names: list[str]
     ) -> list[FileChange]:
-        return [
+        changes = [
             FileChange(repo=self._repo_ref, path=self._path(stack, env, name), content=None)
             for name in component_names
         ]
+        changes.append(
+            FileChange(
+                repo=self._repo_ref,
+                path=self._path(stack, env, RESERVED_COMPONENT),
+                content=None,
+            )
+        )
+        return changes
 
     def bootstrap_manifests(self, config: Config) -> dict[str, str]:
         # No ApplicationSet: each Application is committed directly.
         cm = yaml.safe_dump(notifications_cm(config), sort_keys=False)
         return {"argocd-notifications-cm.yaml": cm}
+
+    def _namespace_application(
+        self, stack: str, cluster: str, record: ComponentRecord
+    ) -> dict[str, Any]:
+        # Sibling of `_application()` for the reserved `_system` pseudo-component: a
+        # literal Application manifest whose only chart value is `namespaceOnly: true`,
+        # used to keep the stack's namespace managed (and pruned on destroy) even when no
+        # real component is deployed to it. No notification subscriptions here -- this
+        # Application never surfaces deploy/health/sync notifications for a user.
+        source = chart_source(self._cfg.workloadChart)
+        source["helm"] = {"values": yaml.safe_dump({"namespaceOnly": True}, sort_keys=False)}
+        return {
+            "apiVersion": "argoproj.io/v1alpha1",
+            "kind": "Application",
+            "metadata": {
+                "name": f"{stack}-{RESERVED_COMPONENT}",
+                "namespace": "argocd",
+                "labels": {
+                    LABEL_STACK: stack,
+                    LABEL_COMPONENT: RESERVED_COMPONENT,
+                    LABEL_MANAGED: "true",
+                },
+                "annotations": to_annotations(record),
+                "finalizers": [FINALIZER],
+            },
+            "spec": {
+                "project": "default",
+                "sources": [source],
+                "destination": {"name": cluster, "namespace": stack},
+                "syncPolicy": {
+                    "automated": {"prune": True, "selfHeal": True},
+                    "syncOptions": ["CreateNamespace=true"],
+                    "managedNamespaceMetadata": {"labels": {LABEL_MANAGED: "true"}},
+                },
+            },
+        }
 
     def _application(
         self,
