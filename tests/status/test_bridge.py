@@ -47,12 +47,16 @@ def test_reserved_component_event_is_ignored():
     client = FakeClient()
     bridge = StatusProgressBridge(Index(record), client)
 
-    bridge.handle(StatusEvent(stack_id="demo", component=RESERVED_COMPONENT, state=CompState.Healthy))
+    bridge.handle(
+        StatusEvent(stack_id="demo", component=RESERVED_COMPONENT, state=CompState.Healthy)
+    )
     assert client.updates == []
     assert client.posts == []
     assert bridge.statuses() == {}
 
-    bridge.handle(StatusEvent(stack_id="demo", component=RESERVED_COMPONENT, state=CompState.Failed))
+    bridge.handle(
+        StatusEvent(stack_id="demo", component=RESERVED_COMPONENT, state=CompState.Failed)
+    )
     assert client.updates == []
     assert client.posts == []
     assert bridge.statuses() == {}
