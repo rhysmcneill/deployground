@@ -95,28 +95,26 @@ class ApplicationTarget:
         cm = yaml.safe_dump(notifications_cm(config), sort_keys=False)
         return {"argocd-notifications-cm.yaml": cm}
 
-    def _namespace_application(
-        self, stack: str, cluster: str, record: ComponentRecord
+    def _app_manifest(
+        self,
+        stack: str,
+        component: str,
+        cluster: str,
+        source: dict[str, Any],
+        annotations: dict[str, str],
     ) -> dict[str, Any]:
-        # Sibling of `_application()` for the reserved `_system` pseudo-component: a
-        # literal Application manifest whose only chart value is `namespaceOnly: true`,
-        # used to keep the stack's namespace managed (and pruned on destroy) even when no
-        # real component is deployed to it. No notification subscriptions here -- this
-        # Application never surfaces deploy/health/sync notifications for a user.
-        source = chart_source(self._cfg.workloadChart)
-        source["helm"] = {"values": yaml.safe_dump({"namespaceOnly": True}, sort_keys=False)}
         return {
             "apiVersion": "argoproj.io/v1alpha1",
             "kind": "Application",
             "metadata": {
-                "name": f"{stack}-{RESERVED_COMPONENT}",
+                "name": f"{stack}-{component}",
                 "namespace": "argocd",
                 "labels": {
                     LABEL_STACK: stack,
-                    LABEL_COMPONENT: RESERVED_COMPONENT,
+                    LABEL_COMPONENT: component,
                     LABEL_MANAGED: "true",
                 },
-                "annotations": to_annotations(record),
+                "annotations": annotations,
                 "finalizers": [FINALIZER],
             },
             "spec": {
@@ -126,10 +124,26 @@ class ApplicationTarget:
                 "syncPolicy": {
                     "automated": {"prune": True, "selfHeal": True},
                     "syncOptions": ["CreateNamespace=true"],
+                    # Labels every namespace this creates, so cluster-wide resources (e.g. a
+                    # ClusterExternalSecret provisioning a shared pull secret) can target "any
+                    # deployground-managed namespace" generically.
                     "managedNamespaceMetadata": {"labels": {LABEL_MANAGED: "true"}},
                 },
             },
         }
+
+    def _namespace_application(
+        self, stack: str, cluster: str, record: ComponentRecord
+    ) -> dict[str, Any]:
+        # Sibling of `_application()` for the reserved `RESERVED_COMPONENT` pseudo-component: a
+        # literal Application manifest whose only chart value is `namespaceOnly: true`,
+        # used to keep the stack's namespace managed (and pruned on destroy) even when no
+        # real component is deployed to it. No notification subscriptions here -- this
+        # Application never surfaces deploy/health/sync notifications for a user.
+        source = chart_source(self._cfg.workloadChart)
+        source["helm"] = {"values": yaml.safe_dump({"namespaceOnly": True}, sort_keys=False)}
+        annotations = to_annotations(record)
+        return self._app_manifest(stack, RESERVED_COMPONENT, cluster, source, annotations)
 
     def _application(
         self,
@@ -163,31 +177,5 @@ class ApplicationTarget:
         # this target to point at (the component file *is* this whole Application CR).
         source = chart_source(self._cfg.workloadChart)
         source["helm"] = {"values": yaml.safe_dump(values, sort_keys=False)}
-        return {
-            "apiVersion": "argoproj.io/v1alpha1",
-            "kind": "Application",
-            "metadata": {
-                "name": f"{stack}-{component}",
-                "namespace": "argocd",
-                "labels": {
-                    LABEL_STACK: stack,
-                    LABEL_COMPONENT: component,
-                    LABEL_MANAGED: "true",
-                },
-                "annotations": {**to_annotations(record), **subscribe_annotations()},
-                "finalizers": [FINALIZER],
-            },
-            "spec": {
-                "project": "default",
-                "sources": [source],
-                "destination": {"name": cluster, "namespace": stack},
-                "syncPolicy": {
-                    "automated": {"prune": True, "selfHeal": True},
-                    "syncOptions": ["CreateNamespace=true"],
-                    # Labels every namespace this creates, so cluster-wide resources (e.g. a
-                    # ClusterExternalSecret provisioning a shared pull secret) can target "any
-                    # deployground-managed namespace" generically.
-                    "managedNamespaceMetadata": {"labels": {LABEL_MANAGED: "true"}},
-                },
-            },
-        }
+        annotations = {**to_annotations(record), **subscribe_annotations()}
+        return self._app_manifest(stack, component, cluster, source, annotations)
