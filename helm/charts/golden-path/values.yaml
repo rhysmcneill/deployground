@@ -1,5 +1,9 @@
 # Defaults. A component file (written by Deployground) overrides image/port/replicas/
 # ingressHost/env/secretRefs. The `deployground:` metadata block in that file is ignored here.
+#
+# namespaceOnly: when true, renders only a labelled Namespace (see templates/namespace.yaml)
+# for Deployground's reserved per-stack namespace-cleanup pseudo-component; not set by
+# ordinary component files. See README.md for the full contract.
 
 image: "" # full reference including tag, e.g. ghcr.io/my-org/api:v1.2.3 (required)
 port: null # container port; when null no Service or Ingress is rendered
