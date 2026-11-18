@@ -6,7 +6,13 @@ import yaml
 
 from deployground.config.models import DeployTargetCfg, RepoRef, TokenRef
 from deployground.index import StackIndex
-from deployground.metadata import ComponentRecord, StackRecord, to_annotations, to_metadata_block
+from deployground.metadata import (
+    RESERVED_COMPONENT,
+    ComponentRecord,
+    StackRecord,
+    to_annotations,
+    to_metadata_block,
+)
 
 REPO = RepoRef(owner="acme", name="deploys", branch="main", authRef=TokenRef(tokenEnv="TOK"))
 CFG = DeployTargetCfg(
@@ -160,6 +166,15 @@ def test_rebuild_skips_malformed_file_and_logs(bad, caplog):
         index, _ = make_index(comp("good", "api"), extra=[bad])
     assert [s.name for s in index.list_live()] == ["good"]
     assert bad[0] in caplog.text
+
+
+def test_rebuild_excludes_reserved_system_component(caplog):
+    with caplog.at_level(logging.WARNING, logger="deployground.index"):
+        index, _ = make_index(comp("demo", "api"), comp("demo", RESERVED_COMPONENT))
+    demo = index.get("demo")
+    assert demo is not None
+    assert set(demo.components) == {"api"}
+    assert caplog.text == ""
 
 
 def test_rebuild_parses_application_manifest_annotations():

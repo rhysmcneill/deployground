@@ -13,7 +13,12 @@ import yaml
 
 from deployground.config.models import DeployTargetCfg, RepoRef
 from deployground.git.base import GitClient
-from deployground.metadata import InvalidMetadata, StackRecord, parse_component_file
+from deployground.metadata import (
+    RESERVED_COMPONENT,
+    InvalidMetadata,
+    StackRecord,
+    parse_component_file,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +45,8 @@ class StackIndex:
                 record = parse_component_file(yaml.safe_load(content))
             except (yaml.YAMLError, InvalidMetadata) as exc:
                 logger.warning("skipping %s: %s", path, exc)
+                continue
+            if record.component == RESERVED_COMPONENT:
                 continue
             stack = stacks.get(record.stack)
             if stack is None:
