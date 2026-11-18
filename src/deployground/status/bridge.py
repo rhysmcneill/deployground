@@ -11,7 +11,7 @@ import logging
 import threading
 from typing import Any, Protocol
 
-from deployground.metadata import StackRecord
+from deployground.metadata import RESERVED_COMPONENT, StackRecord
 from deployground.slack.progress import completion_blocks, render_progress, update_thread
 from deployground.states import CompState, StackState
 from deployground.status.aggregate import EventDeduper, aggregate
@@ -46,6 +46,10 @@ class StatusProgressBridge:
             self._overall.pop(stack, None)
 
     def handle(self, event: StatusEvent) -> None:
+        if event.component == RESERVED_COMPONENT:
+            # The reserved namespace pseudo-component is not a real catalog component:
+            # its status must never leak into Slack progress/completion messages.
+            return
         record = self._index.get(event.stack_id)
         if record is None:
             # Unknown or destroyed stack (e.g. a late Argo event): keep no state, so a
