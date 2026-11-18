@@ -1,0 +1,8 @@
+{{- if .Values.namespaceOnly }}
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ .Release.Namespace }}
+  labels:
+    deployground.io/managed: "true"
+{{- end }}

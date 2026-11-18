@@ -1,3 +1,4 @@
+{{- if not .Values.namespaceOnly }}
 {{- $labels := dict "app.kubernetes.io/name" .Release.Name "app.kubernetes.io/instance" .Release.Name -}}
 apiVersion: apps/v1
 kind: Deployment
@@ -48,3 +49,4 @@ spec:
           {{- end }}
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
+{{- end }}
