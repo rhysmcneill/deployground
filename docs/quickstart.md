@@ -34,7 +34,7 @@ Config holds only the **names** of env vars for secrets (`authRef: {tokenEnv: GI
 Any key can also be overridden by an env var `DEPLOYGROUND_<PATH>` with `__` between segments,
 e.g. `DEPLOYGROUND_LIFECYCLE__MAXLIVEPERUSER=5`.
 
-The component name `_system` is reserved by deployground itself -- it owns each stack's
+The component name `system` is reserved by deployground itself -- it owns each stack's
 namespace lifecycle so `destroy` can clean the namespace up -- and cannot be used as a real
 catalog component name; config validation rejects it.
 
