@@ -39,6 +39,16 @@ set).
 Resource requests/limits come from this chart's `values.yaml` defaults, not from component files.
 Edit them there to change the platform-wide defaults.
 
+Deployground also renders one reserved pseudo-component per stack (minimum chart version
+0.5.0) whose Application sets `namespaceOnly: true` and no other values. A chart used via
+`deployTarget.workloadChart.type: git` (or pinned to an older OCI version) must handle this
+key by rendering ONLY a labelled `Namespace` object (`metadata.labels`:
+`deployground.io/managed: "true"`) and nothing else — see `templates/namespace.yaml` for the
+reference implementation, including the ownership guard that skips rendering when the
+namespace already exists and isn't labelled `deployground.io/managed`. A custom chart that
+doesn't handle `namespaceOnly` will fail to sync for that pseudo-component (e.g. by trying to
+render a Deployment with no `image`).
+
 Try it locally:
 
     helm template pool-party-web helm/charts/golden-path -f path/to/component/config.yaml

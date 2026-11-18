@@ -1,3 +1,4 @@
+import re
 from datetime import UTC, datetime
 
 import pytest
@@ -6,6 +7,7 @@ from deployground.metadata import (
     LABEL_COMPONENT,
     LABEL_MANAGED,
     LABEL_STACK,
+    RESERVED_COMPONENT,
     ComponentRecord,
     InvalidMetadata,
     from_annotations,
@@ -14,6 +16,10 @@ from deployground.metadata import (
     to_annotations,
     to_metadata_block,
 )
+
+
+def test_reserved_component_is_a_valid_k8s_label_value():
+    assert re.fullmatch(r"[a-z0-9]([-a-z0-9]*[a-z0-9])?", RESERVED_COMPONENT)
 
 
 def _record(

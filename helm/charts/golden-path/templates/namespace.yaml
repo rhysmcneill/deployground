@@ -1,0 +1,18 @@
+{{- if .Values.namespaceOnly }}
+{{- $ns := lookup "v1" "Namespace" "" .Release.Namespace }}
+{{- $managed := true }}
+{{- if $ns }}
+{{- $labels := ($ns.metadata.labels) | default dict }}
+{{- if ne (get $labels "deployground.io/managed") "true" }}
+{{- $managed = false }}
+{{- end }}
+{{- end }}
+{{- if $managed }}
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ .Release.Namespace }}
+  labels:
+    deployground.io/managed: "true"
+{{- end }}
+{{- end }}

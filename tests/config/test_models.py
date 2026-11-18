@@ -115,6 +115,13 @@ def test_rule_requires_exactly_one_principal():
         Config.model_validate(make(access={"rules": [{"environments": ["*"]}]}))
 
 
+def test_catalog_entry_rejects_reserved_component_name():
+    with pytest.raises(ValidationError, match="system"):
+        CatalogEntry.model_validate(
+            {"components": {"system": {"image": "x", "defaultVersion": "1"}}}
+        )
+
+
 def test_env_referencing_unknown_repo_fails():
     data = make()
     data["environments"]["homelab"]["repo"] = "missing-repo"

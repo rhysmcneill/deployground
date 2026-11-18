@@ -15,6 +15,7 @@ CFG = DeployTargetCfg(
 EXPIRES = datetime(2026, 11, 13, 9, 0, tzinfo=UTC)
 NAMES = ["api", "web", "worker"]
 TRIGGERS = ("on-deployed", "on-health-degraded", "on-sync-failed")
+SYSTEM_PATH = "dev/demo/system/config.yaml"
 
 
 def resolved(name: str) -> ResolvedComponent:
@@ -95,8 +96,26 @@ def make_files():
 
 def test_files_one_per_component_at_path_template():
     changes = make_files()
-    assert sorted(c.path for c in changes) == [f"dev/demo/{n}/config.yaml" for n in NAMES]
+    expected = sorted([f"dev/demo/{n}/config.yaml" for n in NAMES] + [SYSTEM_PATH])
+    assert sorted(c.path for c in changes) == expected
     assert all(c.repo == REPO and c.content is not None for c in changes)
+
+
+def test_files_for_also_writes_the_reserved_system_file():
+    changes = make_files()
+    assert len(changes) == len(NAMES) + 1
+    system_changes = [c for c in changes if c.path == SYSTEM_PATH]
+    assert len(system_changes) == 1
+    data = yaml.safe_load(system_changes[0].content)
+    assert data["namespaceOnly"] is True
+    block = data["deployground"]
+    assert block["component"] == "system"
+    assert block["stack"] == "demo"
+    other = yaml.safe_load(
+        next(c.content for c in changes if c.path != SYSTEM_PATH)
+    )["deployground"]
+    assert block["owner"] == other["owner"]
+    assert block["env"] == other["env"]
 
 
 def test_file_contains_workload_and_deployground_block():
@@ -143,8 +162,20 @@ def test_files_defaults_ingress_host_to_stack_when_only_class_is_set():
 
 def test_delete_files_targets_all_components():
     changes = ApplicationSetTarget(CFG, REPO).delete_files_for("demo", "dev", NAMES)
-    assert sorted(c.path for c in changes) == [f"dev/demo/{n}/config.yaml" for n in NAMES]
+    expected = sorted([f"dev/demo/{n}/config.yaml" for n in NAMES] + [SYSTEM_PATH])
+    assert sorted(c.path for c in changes) == expected
     assert all(c.content is None and c.repo == REPO for c in changes)
+
+
+def test_delete_files_also_removes_the_reserved_system_file():
+    # "system" is never in component_names (StackRecord.components excludes it), but
+    # delete_files_for must still emit its removal unconditionally.
+    changes = ApplicationSetTarget(CFG, REPO).delete_files_for("demo", "dev", NAMES)
+    assert len(changes) == len(NAMES) + 1
+    system_changes = [c for c in changes if c.path == SYSTEM_PATH]
+    assert len(system_changes) == 1
+    assert system_changes[0].content is None
+    assert system_changes[0].repo == REPO
 
 
 def test_bootstrap_applicationset_templates_labels_annotations_and_subscription():

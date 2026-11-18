@@ -26,6 +26,10 @@ LABEL_MANAGED = "deployground.io/managed"
 
 NO_EXPIRY = "none"
 
+# Reserved for the per-stack namespace-cleanup pseudo-component; never a real catalog
+# component name.
+RESERVED_COMPONENT = "system"
+
 
 class InvalidMetadata(ValueError):
     """Raised when a `deployground:` block is missing or malformed."""

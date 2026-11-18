@@ -6,6 +6,7 @@ generator turns every file into an Application, stamping the selector labels and
 metadata annotations from the file's `deployground:` block.
 """
 
+from dataclasses import replace
 from typing import Any
 
 import yaml
@@ -21,6 +22,7 @@ from deployground.metadata import (
     LABEL_COMPONENT,
     LABEL_MANAGED,
     LABEL_STACK,
+    RESERVED_COMPONENT,
     ComponentRecord,
     to_metadata_block,
 )
@@ -93,15 +95,35 @@ class ApplicationSetTarget:
                     content=yaml.safe_dump(data, sort_keys=False),
                 )
             )
+        if records:
+            base = next(iter(records.values()))
+            block = to_metadata_block(replace(base, component=RESERVED_COMPONENT, version=""))
+            changes.append(
+                FileChange(
+                    repo=self._repo_ref,
+                    path=self._path(stack, env, RESERVED_COMPONENT),
+                    content=yaml.safe_dump(
+                        {"namespaceOnly": True, BLOCK_KEY: block}, sort_keys=False
+                    ),
+                )
+            )
         return changes
 
     def delete_files_for(
         self, stack: str, env: str, component_names: list[str]
     ) -> list[FileChange]:
-        return [
+        changes = [
             FileChange(repo=self._repo_ref, path=self._path(stack, env, name), content=None)
             for name in component_names
         ]
+        changes.append(
+            FileChange(
+                repo=self._repo_ref,
+                path=self._path(stack, env, RESERVED_COMPONENT),
+                content=None,
+            )
+        )
+        return changes
 
     def bootstrap_manifests(self, config: Config) -> dict[str, str]:
         # One ApplicationSet per environment: each targets that env's cluster and only
