@@ -15,7 +15,7 @@ CFG = DeployTargetCfg(
 EXPIRES = datetime(2026, 11, 13, 9, 0, tzinfo=UTC)
 NAMES = ["api", "web", "worker"]
 TRIGGERS = ("on-deployed", "on-health-degraded", "on-sync-failed")
-SYSTEM_PATH = "dev/demo/_system/config.yaml"
+SYSTEM_PATH = "dev/demo/system/config.yaml"
 
 
 def resolved(name: str) -> ResolvedComponent:
@@ -109,7 +109,7 @@ def test_files_for_also_writes_the_reserved_system_file():
     data = yaml.safe_load(system_changes[0].content)
     assert data["namespaceOnly"] is True
     block = data["deployground"]
-    assert block["component"] == "_system"
+    assert block["component"] == "system"
     assert block["stack"] == "demo"
     other = yaml.safe_load(
         next(c.content for c in changes if c.path != SYSTEM_PATH)
@@ -168,7 +168,7 @@ def test_delete_files_targets_all_components():
 
 
 def test_delete_files_also_removes_the_reserved_system_file():
-    # _system is never in component_names (StackRecord.components excludes it), but
+    # "system" is never in component_names (StackRecord.components excludes it), but
     # delete_files_for must still emit its removal unconditionally.
     changes = ApplicationSetTarget(CFG, REPO).delete_files_for("demo", "dev", NAMES)
     assert len(changes) == len(NAMES) + 1

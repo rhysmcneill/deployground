@@ -21,7 +21,7 @@ CFG = DeployTargetCfg(
     type="application", repo="deploys", pathTemplate="{env}/{stack}/{component}/app.yaml"
 )
 CLUSTERS = {"dev": "dev-cluster", "prod": "prod-eks"}
-SYSTEM_PATH = "dev/demo/_system/app.yaml"
+SYSTEM_PATH = "dev/demo/system/app.yaml"
 
 
 def make_files(env="dev"):
@@ -140,18 +140,18 @@ def test_files_for_also_writes_the_reserved_system_application():
     assert len(system_changes) == 1
     app = yaml.safe_load(system_changes[0].content)
     assert app["kind"] == "Application"
-    assert app["metadata"]["name"] == "demo-_system"
+    assert app["metadata"]["name"] == "demo-system"
     values = yaml.safe_load(app["spec"]["sources"][0]["helm"]["values"])
     assert values == {"namespaceOnly": True}
     annotations = app["metadata"]["annotations"]
-    assert annotations["deployground.io/component"] == "_system"
+    assert annotations["deployground.io/component"] == "system"
     assert annotations["deployground.io/stack"] == "demo"
     assert annotations["deployground.io/owner"] == record("api").owner
     assert annotations["deployground.io/version"] == ""
 
 
 def test_delete_files_also_removes_the_reserved_system_application():
-    # _system is never in component_names (StackRecord.components excludes it), but
+    # "system" is never in component_names (StackRecord.components excludes it), but
     # delete_files_for must still emit its removal unconditionally.
     changes = ApplicationTarget(CFG, REPO, CLUSTERS).delete_files_for("demo", "dev", NAMES)
     system_changes = [c for c in changes if c.path == SYSTEM_PATH]

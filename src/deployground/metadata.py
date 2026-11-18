@@ -28,7 +28,7 @@ NO_EXPIRY = "none"
 
 # Reserved for the per-stack namespace-cleanup pseudo-component; never a real catalog
 # component name.
-RESERVED_COMPONENT = "_system"
+RESERVED_COMPONENT = "system"
 
 
 class InvalidMetadata(ValueError):

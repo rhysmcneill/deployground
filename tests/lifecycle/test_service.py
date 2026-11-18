@@ -204,7 +204,7 @@ def test_extend_updates_expiry_in_all_component_files():
     result = svc.extend("U1", "demo", "6h")
     assert len(git.prs) == 1
     changes = git.prs[0][3]
-    assert len(changes) == 3  # 2 real components + the reserved _system file
+    assert len(changes) == 3  # 2 real components + the reserved "system" file
     for change in changes:
         block = yaml.safe_load(change.content)["deployground"]
         assert block["expiresAt"] == "2026-11-12T15:00:00Z"
@@ -230,7 +230,7 @@ def test_extend_tolerates_a_component_dropped_from_the_catalog():
     index.records["demo"] = record
     svc.extend("U1", "demo", "6h")
     changes = git.prs[0][3]
-    assert len(changes) == 2  # "api" (still cataloged) + the reserved _system file
+    assert len(changes) == 2  # "api" (still cataloged) + the reserved "system" file
     new_expiry = NOW + timedelta(hours=6)
     updated = index.records["demo"]
     assert updated.components["legacy"].expires_at == new_expiry  # kept, not regenerated
@@ -271,7 +271,7 @@ def test_extend_resolves_versions_from_record_catalog_not_stack_name():
     svc.extend("U1", "pr-123", "6h")
     assert len(git.prs) == 1
     changes = git.prs[0][3]
-    assert len(changes) == 2  # "api" + the reserved _system file
+    assert len(changes) == 2  # "api" + the reserved "system" file
     assert changes[0].path.split("/")[1] == "pr-123"
     assert "demo" not in changes[0].path.split("/")
 

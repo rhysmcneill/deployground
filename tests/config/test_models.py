@@ -116,9 +116,9 @@ def test_rule_requires_exactly_one_principal():
 
 
 def test_catalog_entry_rejects_reserved_component_name():
-    with pytest.raises(ValidationError, match="_system"):
+    with pytest.raises(ValidationError, match="system"):
         CatalogEntry.model_validate(
-            {"components": {"_system": {"image": "x", "defaultVersion": "1"}}}
+            {"components": {"system": {"image": "x", "defaultVersion": "1"}}}
         )
 
 
