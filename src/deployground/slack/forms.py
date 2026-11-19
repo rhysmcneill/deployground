@@ -7,7 +7,9 @@ Conventions Task 17 depends on:
   so state is read as ``view["state"]["values"][block_id]["val"]``.
 - Block ids: "catalog" (which catalog entry to deploy), "stack" (the free-typed name for
   this live deployment), "env", "ttl", "override_components" (multi-select of components),
-  and "override::<component>" (one text input per overridden component).
+  and "override::<component>__<path>" (one text input per overridable field of each
+  overridden component; `<path>` is "version" for golden-path components, or an operator-
+  declared dot-path into `values`/`chart.version` for custom-chart components).
 - The "catalog" and "override_components" blocks have ``dispatch_action`` set, so picking a
   catalog entry or picking components emits block_actions; the handler then calls
   views.update with ``build_override_blocks`` output (preserve existing override values when
@@ -21,9 +23,10 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Any
 
+from deployground import dotpath
 from deployground.authz.base import AuthzProvider
 from deployground.catalog import Catalog
-from deployground.config.models import CatalogEntry, parse_duration
+from deployground.config.models import CatalogEntry, Component, OverridableField, parse_duration
 
 View = dict[str, Any]
 Block = dict[str, Any]
@@ -65,25 +68,51 @@ def _input(block_id: str, label: str, element: dict[str, Any], **extra: Any) -> 
     }
 
 
+def _overridable_fields(comp: Component) -> list[OverridableField]:
+    """The fields exposed for per-deploy override: `version` for golden-path components,
+    or the operator-declared `overridable` list for custom-chart ones."""
+    if not comp.is_custom_chart:
+        return [OverridableField(path="version", label="Version")]
+    return comp.overridable
+
+
+def _default_override_value(comp: Component, path: str) -> str:
+    if not comp.is_custom_chart:
+        return comp.defaultVersion or ""
+    if path == "chart.version":
+        assert comp.chart is not None
+        return comp.chart.version or ""
+    try:
+        return str(dotpath.get_path(comp.values, path))
+    except KeyError:
+        return ""
+
+
 def build_override_blocks(
     entry: CatalogEntry,
     selected_components: list[str],
     values: Mapping[str, dict[str, str]] | None = None,
 ) -> list[Block]:
-    """One version input per selected component, prefilled to `values` or the default."""
+    """One input per overridable field of each selected component, prefilled to `values`
+    or a sensible default."""
     blocks: list[Block] = []
     for name in selected_components:
         comp = entry.components.get(name)
         if comp is None:
             continue
-        initial = (values or {}).get(name, {}).get("version", comp.defaultVersion)
-        blocks.append(
-            _input(
-                f"{OVERRIDE_PREFIX}{name}",
-                f"{name} version",
-                {"type": "plain_text_input", "initial_value": initial},
+        comp_values = (values or {}).get(name, {})
+        for overridable in _overridable_fields(comp):
+            if overridable.path in comp_values:
+                initial = comp_values[overridable.path]
+            else:
+                initial = _default_override_value(comp, overridable.path)
+            blocks.append(
+                _input(
+                    f"{OVERRIDE_PREFIX}{name}__{overridable.path}",
+                    f"{name} — {overridable.label}",
+                    {"type": "plain_text_input", "initial_value": initial},
+                )
             )
-        )
     return blocks
 
 
@@ -253,12 +282,12 @@ def parse_submission(
     for block_id in view_state:
         if not block_id.startswith(OVERRIDE_PREFIX):
             continue
-        component_name = block_id[len(OVERRIDE_PREFIX) :]
+        component_name, path = block_id[len(OVERRIDE_PREFIX) :].split("__", 1)
         value = _text_value(view_state, block_id)
         if not value:
-            errors[block_id] = "Version cannot be empty."
+            errors[block_id] = "Value cannot be empty."
         else:
-            overrides.setdefault(component_name, {})["version"] = value
+            overrides.setdefault(component_name, {})[path] = value
 
     if errors or catalog is None or env is None:
         return None, errors

@@ -102,7 +102,7 @@ def submit(app, slack, stack, overrides=None, ttl="24h"):
         "ttl": {"val": {"value": ttl}},
     }
     for name, version in (overrides or {}).items():
-        values[f"override::{name}"] = {"val": {"value": version}}
+        values[f"override::{name}__version"] = {"val": {"value": version}}
     body = {"user": {"id": USER}, "view": {"state": {"values": values}}}
     actions.handle_submit(app.deps, ack, body, slack)
 

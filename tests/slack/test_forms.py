@@ -39,6 +39,26 @@ CFG = {
             }
         },
         "api": {"components": {"api": {"image": "i/api", "defaultVersion": "v1.0.0"}}},
+        "custom": {
+            "components": {
+                "myservice": {
+                    "chart": {"version": "1.2.3"},
+                    "imageRef": {"path": "image.tag"},
+                    "values": {"image": {"tag": "v1"}, "replicas": 3},
+                    "overridable": [
+                        {"path": "image.tag", "label": "Image tag"},
+                        {"path": "chart.version", "label": "Chart version"},
+                        {"path": "replicas", "label": "Replicas"},
+                    ],
+                },
+                "bare": {
+                    "chart": {"version": "1.0.0"},
+                    "imageRef": {"path": "image.tag"},
+                    "values": {"image": {"tag": "v1"}},
+                    "overridable": [],
+                },
+            }
+        },
     },
     "deployTarget": {
         "type": "applicationset",
@@ -88,8 +108,9 @@ def state(catalog="shop", env="dev", ttl="24h", overrides=None, name="pr-123"):
         s["env"] = {ACTION_ID: {"type": "static_select", "selected_option": {"value": env}}}
     s["ttl"] = _text(ttl)
     s["stack"] = _text(name)
-    for comp_name, v in (overrides or {}).items():
-        s[f"override::{comp_name}"] = _text(v)
+    for comp_name, fields in (overrides or {}).items():
+        for path, v in fields.items():
+            s[f"override::{comp_name}__{path}"] = _text(v)
     return s
 
 
@@ -122,15 +143,53 @@ def test_override_picker_and_blocks_sit_between_catalog_and_stack_name():
     )
     view = build_deploy_modal("U1", catalog(), FakeAuthz({"dev"}), prefill)
     block_ids = [b.get("block_id") for b in view["blocks"] if b.get("block_id")]
-    assert block_ids == ["catalog", "override_components", "override::web", "stack", "env", "ttl"]
+    assert block_ids == [
+        "catalog",
+        "override_components",
+        "override::web__version",
+        "stack",
+        "env",
+        "ttl",
+    ]
 
 
 def test_override_blocks_only_for_selected_prefilled_to_default():
     entry = catalog().get("shop")
     blocks = build_override_blocks(entry, ["worker"])
-    assert [b["block_id"] for b in blocks] == ["override::worker"]
+    assert [b["block_id"] for b in blocks] == ["override::worker__version"]
     assert blocks[0]["element"]["initial_value"] == "v3.0.0"
     assert blocks[0]["element"]["action_id"] == ACTION_ID
+
+
+def test_build_override_blocks_golden_path_emits_one_field_labeled_version():
+    entry = catalog().get("api")
+    blocks = build_override_blocks(entry, ["api"])
+    assert len(blocks) == 1
+    assert blocks[0]["block_id"] == "override::api__version"
+    assert blocks[0]["label"]["text"] == "api — Version"
+
+
+def test_build_override_blocks_custom_chart_emits_one_field_per_overridable_entry():
+    entry = catalog().get("custom")
+    blocks = build_override_blocks(entry, ["myservice"])
+    ids = {b["block_id"] for b in blocks}
+    assert ids == {
+        "override::myservice__image.tag",
+        "override::myservice__chart.version",
+        "override::myservice__replicas",
+    }
+    labels = {b["block_id"]: b["label"]["text"] for b in blocks}
+    assert labels["override::myservice__image.tag"] == "myservice — Image tag"
+    values = {b["block_id"]: b["element"]["initial_value"] for b in blocks}
+    assert values["override::myservice__image.tag"] == "v1"
+    assert values["override::myservice__chart.version"] == "1.2.3"
+    assert values["override::myservice__replicas"] == "3"
+
+
+def test_build_override_blocks_custom_chart_no_overridable_entries_emits_nothing():
+    entry = catalog().get("custom")
+    blocks = build_override_blocks(entry, ["bare"])
+    assert blocks == []
 
 
 def test_expires_in_defaults_to_24h():
@@ -149,11 +208,11 @@ def test_prefill_populates_fields():
     assert block(view, "ttl")["element"]["initial_value"] == "2h"
     picked = block(view, "override_components")["element"]["initial_options"]
     assert [o["value"] for o in picked] == ["web"]
-    assert block(view, "override::web")["element"]["initial_value"] == "v9"
+    assert block(view, "override::web__version")["element"]["initial_value"] == "v9"
 
 
 def test_parse_submission_extracts_overrides_and_ttl():
-    inputs, errors = parse_submission(state(ttl=" 2h ", overrides={"web": " v9 "}))
+    inputs, errors = parse_submission(state(ttl=" 2h ", overrides={"web": {"version": " v9 "}}))
     assert errors == {}
     assert inputs == DeployInputs(
         catalog="shop", stack="pr-123", env="dev", overrides={"web": {"version": "v9"}}, ttl="2h"
@@ -162,11 +221,18 @@ def test_parse_submission_extracts_overrides_and_ttl():
     assert inputs.ttl == "none" and inputs.overrides == {}
 
 
+def test_parse_submission_groups_overrides_by_component_and_path():
+    bad_state = state(overrides={"myservice": {"image.tag": "v9", "replicas": "5"}})
+    inputs, errors = parse_submission(bad_state)
+    assert errors == {}
+    assert inputs.overrides["myservice"] == {"image.tag": "v9", "replicas": "5"}
+
+
 def test_parse_submission_returns_inline_errors_for_bad_input():
-    bad = state(catalog=None, env=None, ttl="soon", overrides={"web": "  "})
+    bad = state(catalog=None, env=None, ttl="soon", overrides={"web": {"version": "  "}})
     inputs, errors = parse_submission(bad)
     assert inputs is None
-    assert set(errors) == {"catalog", "env", "ttl", "override::web"}
+    assert set(errors) == {"catalog", "env", "ttl", "override::web__version"}
     _, errors = parse_submission(state(ttl=""))
     assert set(errors) == {"ttl"}
 
