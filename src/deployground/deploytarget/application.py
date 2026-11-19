@@ -12,7 +12,7 @@ from typing import Any
 
 import yaml
 
-from deployground.catalog import ResolvedComponent, resolve_ingress_host
+from deployground.catalog import ResolvedComponent, ResolvedCustomComponent, resolve_ingress_host
 from deployground.config.models import Config, DeployTargetCfg, RepoRef
 from deployground.deploytarget.notifications import notifications_cm, subscribe_annotations
 from deployground.deploytarget.workloadchart import chart_source
@@ -45,7 +45,7 @@ class ApplicationTarget:
         self,
         stack: str,
         env: str,
-        components: dict[str, ResolvedComponent],
+        components: dict[str, ResolvedComponent | ResolvedCustomComponent],
         records: dict[str, ComponentRecord],
     ) -> list[FileChange]:
         cluster = self._env_clusters[env]
@@ -61,7 +61,7 @@ class ApplicationTarget:
         ]
         if records:
             base = next(iter(records.values()))
-            system_record = replace(base, component=RESERVED_COMPONENT, version="")
+            system_record = replace(base, component=RESERVED_COMPONENT, version="", overrides={})
             changes.append(
                 FileChange(
                     repo=self._repo_ref,
@@ -150,32 +150,38 @@ class ApplicationTarget:
         stack: str,
         component: str,
         cluster: str,
-        comp: ResolvedComponent,
+        comp: ResolvedComponent | ResolvedCustomComponent,
         record: ComponentRecord,
     ) -> dict[str, Any]:
-        values: dict[str, Any] = {"image": f"{comp.image}:{comp.version}"}
-        if comp.port is not None:
-            values["port"] = comp.port
-        values["replicas"] = comp.replicas
-        ingress_host = resolve_ingress_host(comp.ingressHost, comp.ingressClassName, stack)
-        if ingress_host is not None:
-            values["ingressHost"] = ingress_host
-        if comp.env:
-            values["env"] = dict(comp.env)
-        if comp.secretRefs:
-            values["secretRefs"] = list(comp.secretRefs)
-        if comp.imagePullSecrets:
-            values["imagePullSecrets"] = list(comp.imagePullSecrets)
-        if comp.serviceAccountName:
-            values["serviceAccountName"] = comp.serviceAccountName
-        if comp.ingressClassName:
-            values["ingressClassName"] = comp.ingressClassName
-        # Literal manifest (no Go-template vars): the chart source is resolved once here
-        # from config, same defaulting as the ApplicationSet target. Values are already
-        # known in full, so they stay inline on the chart source's `helm.values` rather
-        # than a second `ref: values` file source — there is no separate values file for
-        # this target to point at (the component file *is* this whole Application CR).
-        source = chart_source(self._cfg.workloadChart)
+        if isinstance(comp, ResolvedComponent):
+            values: dict[str, Any] = {"image": f"{comp.image}:{comp.version}"}
+            if comp.port is not None:
+                values["port"] = comp.port
+            values["replicas"] = comp.replicas
+            ingress_host = resolve_ingress_host(comp.ingressHost, comp.ingressClassName, stack)
+            if ingress_host is not None:
+                values["ingressHost"] = ingress_host
+            if comp.env:
+                values["env"] = dict(comp.env)
+            if comp.secretRefs:
+                values["secretRefs"] = list(comp.secretRefs)
+            if comp.imagePullSecrets:
+                values["imagePullSecrets"] = list(comp.imagePullSecrets)
+            if comp.serviceAccountName:
+                values["serviceAccountName"] = comp.serviceAccountName
+            if comp.ingressClassName:
+                values["ingressClassName"] = comp.ingressClassName
+            # Literal manifest (no Go-template vars): the chart source is resolved once here
+            # from config, same defaulting as the ApplicationSet target. Values are already
+            # known in full, so they stay inline on the chart source's `helm.values` rather
+            # than a second `ref: values` file source — there is no separate values file for
+            # this target to point at (the component file *is* this whole Application CR).
+            source = chart_source(self._cfg.workloadChart)
+        else:
+            values = dict(comp.values)
+            # Custom-chart component: render from its own resolved chart, not the
+            # deploy target's golden-path workloadChart.
+            source = chart_source(comp.chart)
         source["helm"] = {"values": yaml.safe_dump(values, sort_keys=False)}
         annotations = {**to_annotations(record), **subscribe_annotations()}
         return self._app_manifest(stack, component, cluster, source, annotations)

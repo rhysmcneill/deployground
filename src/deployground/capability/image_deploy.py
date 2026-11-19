@@ -1,7 +1,13 @@
 """The image-deploy capability: deploy a catalog stack's component images to an environment."""
 
+from deployground import dotpath
 from deployground.capability.base import GuardrailViolation, RenderContext, RenderInputs
-from deployground.catalog import ResolvedComponent
+from deployground.catalog import (
+    ResolvedComponent,
+    ResolvedCustomComponent,
+    chart_pin,
+    seed_chart_version_override,
+)
 from deployground.config.models import Environment, TtlPolicy
 from deployground.git.base import FileChange
 from deployground.metadata import ComponentRecord, StackRecord
@@ -34,9 +40,12 @@ class ImageDeployCapability:
                 owner_email=inputs.owner_email,
                 env=inputs.env,
                 expires_at=inputs.expires_at,
-                version=comp.version,
+                version=(
+                    comp.version if isinstance(comp, ResolvedComponent) else chart_pin(comp.chart)
+                ),
                 thread_ts=inputs.thread_ts,
                 channel=inputs.channel,
+                overrides=seed_chart_version_override(comp, inputs.overrides.get(name, {})),
             )
             for name, comp in components.items()
         }
@@ -52,18 +61,33 @@ class ImageDeployCapability:
         return ctx.environments[env].ttl
 
     @staticmethod
-    def _check_guardrails(components: dict[str, ResolvedComponent], ctx: RenderContext) -> None:
+    def _check_guardrails(
+        components: dict[str, ResolvedComponent | ResolvedCustomComponent], ctx: RenderContext
+    ) -> None:
         cfg = ctx.capability_cfg
         for name, comp in components.items():
-            if not any(_in_registry(comp.image, r) for r in cfg.allowedRegistries):
+            if isinstance(comp, ResolvedComponent):
+                image = comp.image
+                ingress_host = comp.ingressHost
+            else:
+                image = dotpath.get_path(comp.values, comp.imageRef.path)
+                if not isinstance(image, str):
+                    raise GuardrailViolation(
+                        f"component {name!r} imageRef path {comp.imageRef.path!r} resolved to "
+                        f"a non-string value {image!r}"
+                    )
+                ingress_host = (
+                    dotpath.get_path(comp.values, comp.ingressRef.path)
+                    if comp.ingressRef is not None
+                    else None
+                )
+            if not any(_in_registry(image, r) for r in cfg.allowedRegistries):
                 raise GuardrailViolation(
-                    f"component {name!r} image {comp.image!r} is not under any allowed "
+                    f"component {name!r} image {image!r} is not under any allowed "
                     f"registry {cfg.allowedRegistries!r}"
                 )
-            if comp.ingressHost and not any(
-                _in_domain(comp.ingressHost, d) for d in cfg.ingressDomains
-            ):
+            if ingress_host and not any(_in_domain(ingress_host, d) for d in cfg.ingressDomains):
                 raise GuardrailViolation(
-                    f"component {name!r} ingress host {comp.ingressHost!r} is not under any "
+                    f"component {name!r} ingress host {ingress_host!r} is not under any "
                     f"allowed ingress domain {cfg.ingressDomains!r}"
                 )

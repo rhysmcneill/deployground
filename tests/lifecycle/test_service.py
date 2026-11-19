@@ -3,12 +3,16 @@ from datetime import UTC, datetime, timedelta
 import pytest
 import yaml
 
-from deployground.capability.base import RenderInputs
+from deployground.capability.base import RenderContext, RenderInputs
+from deployground.capability.image_deploy import ImageDeployCapability
+from deployground.catalog import Catalog
+from deployground.config.models import Config
+from deployground.deploytarget.applicationset import ApplicationSetTarget
 from deployground.git.base import FileChange, PrResult
 from deployground.lifecycle.service import Denied, LifecycleService
 from deployground.metadata import ComponentRecord, StackRecord
-from tests.capability.test_image_deploy import make_cfg, make_ctx
-from tests.deploytarget.test_applicationset import REPO
+from tests.capability.test_image_deploy import make_cfg, make_cfg_with_custom_chart, make_ctx
+from tests.deploytarget.test_applicationset import CFG, REPO
 
 NOW = datetime(2026, 11, 12, 9, 0, tzinfo=UTC)
 
@@ -119,7 +123,7 @@ def test_deploy_denied_for_disallowed_env():
 
 def test_deploy_opens_single_pr_and_upserts_index():
     svc, git, _, index = make_service()
-    result = deploy(svc, overrides={"api": "1.2.3"})
+    result = deploy(svc, overrides={"api": {"version": "1.2.3"}})
     assert len(git.prs) == 1
     repo, _branch, _title, _changes, auto_merge = git.prs[0]
     assert repo == REPO and auto_merge is True
@@ -376,6 +380,90 @@ def test_failed_open_pr_leaves_no_reservation():
     git.open_pr = good_open
     deploy(svc)
     assert len(git.prs) == 1
+
+
+def test_deploy_mixed_golden_path_and_custom_chart_stack_sets_versions():
+    config = make_cfg_with_custom_chart()
+    svc, git, _, index = make_service(config=config)
+    result = deploy(
+        svc,
+        catalog="demo",
+        stack="demo",
+        overrides={"myservice": {"image.tag": "v9", "replicas": "5"}},
+    )
+    assert len(git.prs) == 1
+    record = result.stack_record
+    assert record.components["api"].version == "1.0.0"
+    assert record.components["myservice"].version == "1.4.0"
+    # chart.version is implicitly pinned even though it was never declared overridable
+    # or submitted by the operator -- see test_extend_pins_chart_version_even_when_... below.
+    assert record.components["myservice"].overrides == {
+        "image.tag": "v9",
+        "replicas": "5",
+        "chart.version": "1.4.0",
+    }
+
+
+def test_extend_replays_custom_chart_overrides_verbatim():
+    config = make_cfg_with_custom_chart()
+    svc, git, _, index = make_service(config=config)
+    deploy(
+        svc,
+        catalog="demo",
+        stack="demo",
+        overrides={"myservice": {"image.tag": "v9", "replicas": "5"}},
+    )
+    svc.extend("U1", "demo", "6h")
+    changes = git.prs[-1][3]
+    by_path = {c.path: yaml.safe_load(c.content) for c in changes if c.path.endswith(".yaml")}
+    myservice_content = by_path["dev/demo/myservice/config.yaml"]
+    assert myservice_content["image"]["tag"] == "v9"
+    assert myservice_content["replicas"] == "5"
+    updated = index.records["demo"]
+    assert updated.components["myservice"].overrides == {
+        "image.tag": "v9",
+        "replicas": "5",
+        "chart.version": "1.4.0",
+    }
+
+
+def test_extend_pins_chart_version_even_when_catalog_bumps_after_deploy():
+    """myservice's `chart.version` is not in its `overridable` list -- `deploy()` must still
+    persist it in the component's `overrides` so a later catalog bump to that chart's pinned
+    version doesn't silently flow through on the next `extend()`, the same guarantee
+    golden-path components get for free via their always-submitted `version` override."""
+    config = make_cfg_with_custom_chart()
+    box = {"cfg": config}
+    ctx = RenderContext(
+        catalog=Catalog(lambda: box["cfg"]),
+        deploy_target=ApplicationSetTarget(CFG, REPO),
+        capability_cfg=config.capabilities["image-deploy"],
+        environments=config.environments,
+    )
+    git, index = FakeGit(), FakeIndex()
+    svc = LifecycleService(
+        authz=FakeAuthz(),
+        capability=ImageDeployCapability(),
+        git=git,
+        index=index,
+        environments=config.environments,
+        repos=config.git.repos,
+        lifecycle_cfg=config.lifecycle.model_copy(update={"maxLivePerUser": 10}),
+        render_ctx=ctx,
+        clock=lambda: NOW,
+    )
+    deploy(svc, catalog="demo", stack="demo")
+    assert index.records["demo"].components["myservice"].overrides["chart.version"] == "1.4.0"
+
+    bumped = config.model_dump()
+    bumped["catalog"]["demo"]["components"]["myservice"]["chart"]["version"] = "9.9.9"
+    box["cfg"] = Config.model_validate(bumped)
+
+    svc.extend("U1", "demo", "6h")
+    changes = git.prs[-1][3]
+    by_path = {c.path: yaml.safe_load(c.content) for c in changes if c.path.endswith(".yaml")}
+    chart = by_path["dev/demo/myservice/config.yaml"]["deployground"]["chart"]
+    assert chart["targetRevision"] == "1.4.0"
 
 
 def test_destroy_returns_pr_state():

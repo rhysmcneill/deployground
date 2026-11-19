@@ -1,6 +1,12 @@
 import pytest
 
-from deployground.catalog import Catalog, UnknownComponent, UnknownStack, resolve_ingress_host
+from deployground.catalog import (
+    Catalog,
+    DisallowedOverride,
+    UnknownComponent,
+    UnknownStack,
+    resolve_ingress_host,
+)
 from deployground.config.models import Config
 
 BASE = {
@@ -41,6 +47,43 @@ BASE = {
                 "cache": {"image": "ghcr.io/my-org/cache", "defaultVersion": "v4.0.0"},
             }
         },
+        "demo": {
+            "components": {
+                "api": {
+                    "image": "ghcr.io/my-org/api",
+                    "defaultVersion": "1.0.0",
+                    "port": 8080,
+                },
+                "myservice": {
+                    "chart": {
+                        "type": "oci",
+                        "repo": "ghcr.io/my-org",
+                        "chart": "myservice",
+                        "version": "v1",
+                    },
+                    "values": {"image": {"repository": "my-org/myservice", "tag": "v1"}},
+                    "imageRef": {"path": "image.tag"},
+                    "overridable": [
+                        {"path": "image.tag", "label": "Image tag"},
+                        {"path": "replicas", "label": "Replicas"},
+                    ],
+                },
+                "gitservice": {
+                    "chart": {
+                        "type": "git",
+                        "gitRepo": "https://github.com/my-org/charts.git",
+                        "gitRef": "main",
+                        "chartPath": "charts/gitservice",
+                    },
+                    "values": {"image": {"repository": "my-org/gitservice", "tag": "v1"}},
+                    "imageRef": {"path": "image.tag"},
+                    "overridable": [
+                        {"path": "image.tag", "label": "Image tag"},
+                        {"path": "chart.version", "label": "Chart version (git ref)"},
+                    ],
+                },
+            }
+        },
     },
     "capabilities": {"image-deploy": {"enabled": True, "allowedRegistries": ["ghcr.io/my-org"]}},
     "access": {"rules": [{"user": "U012ABC", "environments": ["*"]}]},
@@ -60,7 +103,7 @@ def make_catalog() -> Catalog:
 
 def test_single_service_is_stack_of_one():
     catalog = make_catalog()
-    assert catalog.list_entries() == ["api", "shop"]
+    assert catalog.list_entries() == ["api", "demo", "shop"]
     stack = catalog.get("api")
     assert list(stack.components) == ["api"]
     resolved = catalog.resolve_versions("api", {})
@@ -98,7 +141,7 @@ def test_resolve_uses_default_when_no_override():
 
 
 def test_resolve_applies_override_per_component():
-    resolved = make_catalog().resolve_versions("shop", {"worker": "v3.1.0"})
+    resolved = make_catalog().resolve_versions("shop", {"worker": {"version": "v3.1.0"}})
     assert resolved["worker"].version == "v3.1.0"
     assert resolved["web"].version == "v2.0.0"
     assert resolved["cache"].version == "v4.0.0"
@@ -106,7 +149,77 @@ def test_resolve_applies_override_per_component():
 
 def test_unknown_component_override_raises():
     with pytest.raises(UnknownComponent, match="nope"):
-        make_catalog().resolve_versions("shop", {"nope": "v9"})
+        make_catalog().resolve_versions("shop", {"nope": {"version": "v9"}})
+
+
+def test_resolve_versions_golden_path_unchanged_with_version_override():
+    resolved = make_catalog().resolve_versions("demo", {"api": {"version": "2.0.0"}})
+    assert resolved["api"].version == "2.0.0"
+
+
+def test_resolve_versions_golden_path_defaults_without_override():
+    resolved = make_catalog().resolve_versions("demo", {})
+    assert resolved["api"].version == "1.0.0"
+
+
+def test_resolve_versions_custom_chart_applies_values_override():
+    resolved = make_catalog().resolve_versions(
+        "demo", {"myservice": {"image.tag": "v9", "replicas": "5"}}
+    )
+    comp = resolved["myservice"]
+    assert comp.values["image"]["tag"] == "v9"
+    assert comp.values["replicas"] == "5"
+
+
+def test_resolve_versions_custom_chart_overrides_chart_version():
+    resolved = make_catalog().resolve_versions("demo", {"myservice": {"chart.version": "2.0.0"}})
+    assert resolved["myservice"].chart.version == "2.0.0"
+
+
+def test_resolve_versions_unknown_component_override_raises_demo():
+    with pytest.raises(UnknownComponent):
+        make_catalog().resolve_versions("demo", {"nope": {"version": "x"}})
+
+
+def test_resolve_versions_custom_chart_rejects_undeclared_override_path():
+    with pytest.raises(DisallowedOverride):
+        make_catalog().resolve_versions("demo", {"myservice": {"image.repository": "evil/img"}})
+
+
+def test_resolve_versions_custom_chart_rejects_undeclared_path_atomically():
+    """A disallowed path in the same submission must not partially apply the allowed ones."""
+    catalog = make_catalog()
+    with pytest.raises(DisallowedOverride):
+        catalog.resolve_versions(
+            "demo", {"myservice": {"image.tag": "v9", "image.repository": "evil/img"}}
+        )
+    # Unaffected by the failed call: a fresh resolve still sees the untouched default.
+    resolved = catalog.resolve_versions("demo", {})
+    assert resolved["myservice"].values["image"]["tag"] == "v1"
+
+
+def test_resolve_versions_custom_chart_allows_declared_overridable_paths():
+    resolved = make_catalog().resolve_versions(
+        "demo", {"myservice": {"image.tag": "v9", "replicas": "5"}}
+    )
+    comp = resolved["myservice"]
+    assert comp.values["image"]["tag"] == "v9"
+    assert comp.values["replicas"] == "5"
+
+
+def test_resolve_versions_custom_chart_always_allows_chart_version():
+    resolved = make_catalog().resolve_versions("demo", {"myservice": {"chart.version": "9.9.9"}})
+    assert resolved["myservice"].chart.version == "9.9.9"
+
+
+def test_resolve_versions_custom_chart_version_override_sets_git_ref_for_git_charts():
+    # chart.version means "gitRef" for a git-type chart; setting `.version` directly would
+    # be read by nothing (workloadchart.py only reads `.version` for type == "oci").
+    resolved = make_catalog().resolve_versions(
+        "demo", {"gitservice": {"chart.version": "feature-branch"}}
+    )
+    assert resolved["gitservice"].chart.gitRef == "feature-branch"
+    assert resolved["gitservice"].chart.version is None
 
 
 def test_unknown_stack_raises():

@@ -5,11 +5,67 @@ import yaml
 
 from deployground.capability.base import GuardrailViolation, RenderContext, RenderInputs
 from deployground.capability.image_deploy import ImageDeployCapability
-from deployground.catalog import Catalog
-from deployground.config.models import CapabilityCfg, Config
+from deployground.catalog import Catalog, ResolvedCustomComponent
+from deployground.config.models import CapabilityCfg, Config, FieldRef, WorkloadChartCfg
 from deployground.deploytarget.applicationset import ApplicationSetTarget
-from deployground.metadata import ComponentRecord, StackRecord, parse_metadata_block
+from deployground.metadata import (
+    ComponentRecord,
+    StackRecord,
+    parse_component_file,
+    parse_metadata_block,
+)
 from tests.deploytarget.test_applicationset import CFG, REPO, make_config
+
+
+def make_cfg_with_custom_chart() -> Config:
+    base = make_config().model_dump()
+    base["environments"]["dev"]["ttl"] = {"default": "24h", "max": "72h"}
+    base["catalog"] = {
+        "demo": {
+            "components": {
+                "api": {
+                    "image": "ghcr.io/org/api",
+                    "defaultVersion": "1.0.0",
+                    "port": 8080,
+                },
+                "myservice": {
+                    "chart": {
+                        "type": "oci",
+                        "repo": "ghcr.io/org",
+                        "chart": "myservice-chart",
+                        "version": "1.4.0",
+                    },
+                    "values": {"image": {"repository": "ghcr.io/org/myservice", "tag": "v1"}},
+                    "imageRef": {"path": "image.repository"},
+                    "overridable": [
+                        {"path": "image.tag", "label": "Version"},
+                        {"path": "replicas", "label": "Replicas"},
+                    ],
+                },
+                "gitservice": {
+                    "chart": {
+                        "type": "git",
+                        "gitRepo": "https://github.com/org/charts.git",
+                        "gitRef": "main",
+                        "chartPath": "charts/gitservice",
+                    },
+                    "values": {"image": {"repository": "ghcr.io/org/gitservice", "tag": "v1"}},
+                    "imageRef": {"path": "image.repository"},
+                    "overridable": [
+                        {"path": "image.tag", "label": "Version"},
+                    ],
+                },
+            }
+        }
+    }
+    base["capabilities"] = {
+        "image-deploy": {
+            "allowedRegistries": ["ghcr.io/org"],
+            "ingressDomains": ["home.example"],
+        }
+    }
+    return Config.model_validate(base)
+
 
 EXPIRES = datetime(2026, 11, 13, 9, 0, tzinfo=UTC)
 
@@ -115,7 +171,9 @@ def test_render_resolves_versions_from_catalog_not_stack_name():
 
 
 def test_render_applies_version_overrides():
-    changes = ImageDeployCapability().render(make_inputs(overrides={"web": "9.9.9"}), make_ctx())
+    changes = ImageDeployCapability().render(
+        make_inputs(overrides={"web": {"version": "9.9.9"}}), make_ctx()
+    )
     by_path = {c.path: yaml.safe_load(c.content) for c in changes}
     assert parse_metadata_block(by_path["dev/demo/web/config.yaml"]).version == "9.9.9"
     assert parse_metadata_block(by_path["dev/demo/api/config.yaml"]).version == "1.0.0"
@@ -159,6 +217,99 @@ def test_destroy_emits_delete_for_all_components():
         "dev/demo/web/config.yaml",
     ]
     assert all(c.content is None for c in changes)
+
+
+def test_check_guardrails_blocks_disallowed_registry_for_custom_chart():
+    ctx = make_ctx()
+    comp = ResolvedCustomComponent(
+        chart=WorkloadChartCfg(),
+        values={"image": {"repository": "evil.example/x"}},
+        imageRef=FieldRef(path="image.repository"),
+    )
+    with pytest.raises(GuardrailViolation, match="evil.example"):
+        ImageDeployCapability._check_guardrails({"myservice": comp}, ctx)
+
+
+def test_check_guardrails_allows_matching_registry_for_custom_chart():
+    ctx = make_ctx()
+    comp = ResolvedCustomComponent(
+        chart=WorkloadChartCfg(),
+        values={"image": {"repository": "ghcr.io/org/custom"}},
+        imageRef=FieldRef(path="image.repository"),
+    )
+    ImageDeployCapability._check_guardrails({"myservice": comp}, ctx)
+
+
+def test_check_guardrails_skips_ingress_check_when_no_ingress_ref():
+    ctx = make_ctx()
+    comp = ResolvedCustomComponent(
+        chart=WorkloadChartCfg(),
+        values={"image": {"repository": "ghcr.io/org/custom"}, "host": "evil.example"},
+        imageRef=FieldRef(path="image.repository"),
+        ingressRef=None,
+    )
+    ImageDeployCapability._check_guardrails({"myservice": comp}, ctx)
+
+
+def test_check_guardrails_raises_guardrail_violation_for_non_string_image_ref_value():
+    ctx = make_ctx()
+    comp = ResolvedCustomComponent(
+        chart=WorkloadChartCfg(),
+        values={"image": {"repository": {"nested": "dict"}}},
+        imageRef=FieldRef(path="image.repository"),
+    )
+    with pytest.raises(GuardrailViolation, match="non-string"):
+        ImageDeployCapability._check_guardrails({"myservice": comp}, ctx)
+
+
+def test_check_guardrails_blocks_disallowed_ingress_domain_for_custom_chart():
+    ctx = make_ctx()
+    comp = ResolvedCustomComponent(
+        chart=WorkloadChartCfg(),
+        values={
+            "image": {"repository": "ghcr.io/org/custom"},
+            "ingress": {"host": "demo.evil.example"},
+        },
+        imageRef=FieldRef(path="image.repository"),
+        ingressRef=FieldRef(path="ingress.host"),
+    )
+    with pytest.raises(GuardrailViolation, match="demo.evil.example"):
+        ImageDeployCapability._check_guardrails({"myservice": comp}, ctx)
+
+
+def test_render_succeeds_and_sets_chart_version_for_custom_chart_component():
+    cfg = make_cfg_with_custom_chart()
+    ctx = RenderContext(
+        catalog=Catalog(lambda: cfg),
+        deploy_target=ApplicationSetTarget(CFG, REPO),
+        capability_cfg=cfg.capabilities["image-deploy"],
+        environments=cfg.environments,
+    )
+    changes = ImageDeployCapability().render(make_inputs(catalog="demo"), ctx)
+    by_path = {c.path: yaml.safe_load(c.content) for c in changes}
+    record = parse_metadata_block(by_path["dev/demo/myservice/config.yaml"])
+    assert record.version == "1.4.0"
+
+
+def test_render_writes_a_reparseable_record_for_git_type_custom_chart_component():
+    """A `type: "git"` custom chart has no `.version` (that chart's pin is expressed via
+    `.gitRef` instead) -- ``ComponentRecord.version`` must never be written as the literal
+    `None`/`null` that `.chart.version` is for a git chart, or `parse_component_file` raises
+    `InvalidMetadata` on the very next `StackIndex.rebuild()` and the stack silently drops out
+    of the in-memory index."""
+    cfg = make_cfg_with_custom_chart()
+    ctx = RenderContext(
+        catalog=Catalog(lambda: cfg),
+        deploy_target=ApplicationSetTarget(CFG, REPO),
+        capability_cfg=cfg.capabilities["image-deploy"],
+        environments=cfg.environments,
+    )
+    changes = ImageDeployCapability().render(make_inputs(catalog="demo"), ctx)
+    by_path = {c.path: yaml.safe_load(c.content) for c in changes}
+    # Full write-then-reparse round trip through the real entry point, exactly as
+    # StackIndex.rebuild() exercises it.
+    record = parse_component_file(by_path["dev/demo/gitservice/config.yaml"])
+    assert record.version == "main"
 
 
 def test_needs_approval_follows_env():

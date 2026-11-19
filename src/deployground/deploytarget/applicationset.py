@@ -11,10 +11,10 @@ from typing import Any
 
 import yaml
 
-from deployground.catalog import ResolvedComponent, resolve_ingress_host
+from deployground.catalog import ResolvedComponent, ResolvedCustomComponent, resolve_ingress_host
 from deployground.config.models import Config, DeployTargetCfg, RepoRef
 from deployground.deploytarget.notifications import notifications_cm, subscribe_annotations
-from deployground.deploytarget.workloadchart import chart_source
+from deployground.deploytarget.workloadchart import chart_fields
 from deployground.git.base import FileChange
 from deployground.metadata import (
     ANNOTATION_PREFIX,
@@ -65,29 +65,39 @@ class ApplicationSetTarget:
         self,
         stack: str,
         env: str,
-        components: dict[str, ResolvedComponent],
+        components: dict[str, ResolvedComponent | ResolvedCustomComponent],
         records: dict[str, ComponentRecord],
     ) -> list[FileChange]:
         changes: list[FileChange] = []
         for name, comp in components.items():
-            data: dict[str, Any] = {"image": f"{comp.image}:{comp.version}"}
-            if comp.port is not None:
-                data["port"] = comp.port
-            data["replicas"] = comp.replicas
-            ingress_host = resolve_ingress_host(comp.ingressHost, comp.ingressClassName, stack)
-            if ingress_host is not None:
-                data["ingressHost"] = ingress_host
-            if comp.env:
-                data["env"] = dict(comp.env)
-            if comp.secretRefs:
-                data["secretRefs"] = list(comp.secretRefs)
-            if comp.imagePullSecrets:
-                data["imagePullSecrets"] = list(comp.imagePullSecrets)
-            if comp.serviceAccountName:
-                data["serviceAccountName"] = comp.serviceAccountName
-            if comp.ingressClassName:
-                data["ingressClassName"] = comp.ingressClassName
-            data[BLOCK_KEY] = to_metadata_block(records[name])
+            if isinstance(comp, ResolvedComponent):
+                data: dict[str, Any] = {"image": f"{comp.image}:{comp.version}"}
+                if comp.port is not None:
+                    data["port"] = comp.port
+                data["replicas"] = comp.replicas
+                ingress_host = resolve_ingress_host(
+                    comp.ingressHost, comp.ingressClassName, stack
+                )
+                if ingress_host is not None:
+                    data["ingressHost"] = ingress_host
+                if comp.env:
+                    data["env"] = dict(comp.env)
+                if comp.secretRefs:
+                    data["secretRefs"] = list(comp.secretRefs)
+                if comp.imagePullSecrets:
+                    data["imagePullSecrets"] = list(comp.imagePullSecrets)
+                if comp.serviceAccountName:
+                    data["serviceAccountName"] = comp.serviceAccountName
+                if comp.ingressClassName:
+                    data["ingressClassName"] = comp.ingressClassName
+            else:
+                data = dict(comp.values)
+            block = to_metadata_block(records[name])
+            if isinstance(comp, ResolvedComponent):
+                block["chart"] = chart_fields(self._cfg.workloadChart)
+            else:
+                block["chart"] = chart_fields(comp.chart)
+            data[BLOCK_KEY] = block
             changes.append(
                 FileChange(
                     repo=self._repo_ref,
@@ -97,7 +107,10 @@ class ApplicationSetTarget:
             )
         if records:
             base = next(iter(records.values()))
-            block = to_metadata_block(replace(base, component=RESERVED_COMPONENT, version=""))
+            block = to_metadata_block(
+                replace(base, component=RESERVED_COMPONENT, version="", overrides={})
+            )
+            block["chart"] = chart_fields(self._cfg.workloadChart)
             changes.append(
                 FileChange(
                     repo=self._repo_ref,
@@ -154,12 +167,17 @@ class ApplicationSetTarget:
         }
         annotations.update(subscribe_annotations())
 
-        source = chart_source(self._cfg.workloadChart)
         # The git "files" generator exposes the matched file's directory as {{path}} (not
         # {{path.path}} -- that isn't a real generator variable here, so it was left as a
         # literal, unsubstituted string and helm then failed to find the literal path
         # "{{path.path}}/config.yaml").
-        source["helm"] = {"valueFiles": ["$values/{{path}}/{{path.filename}}"]}
+        source = {
+            "repoURL": _ref("chart.repoURL"),
+            "chart": _ref("chart.chart"),
+            "path": _ref("chart.path"),
+            "targetRevision": _ref("chart.targetRevision"),
+            "helm": {"valueFiles": ["$values/{{path}}/{{path.filename}}"]},
+        }
         values_source = {
             "repoURL": repo_url,
             "targetRevision": self._repo_ref.branch,

@@ -296,7 +296,7 @@ def test_prefilled_button_opens_modal_with_values():
             "catalog": "shop",
             "stack": "shop",
             "env": "staging",
-            "overrides": {"web": "v9"},
+            "overrides": {"web": {"version": "v9"}},
             "ttl": "2h",
         }
     )
@@ -311,6 +311,30 @@ def test_prefilled_button_opens_modal_with_values():
     assert client.named("views_open")[0]["trigger_id"] == "T1"
     assert '"initial_option": {"text": {"type": "plain_text", "text": "staging"}' in text
     assert '"initial_value": "v9"' in text and '"initial_value": "2h"' in text
+
+
+def test_handle_prefill_accepts_old_flat_overrides_shape():
+    deps, _ = make_deps()
+    client, ack = FakeClient(), Ack()
+    value = json.dumps(
+        {
+            "catalog": "shop",
+            "stack": "shop",
+            "env": "staging",
+            "overrides": {"web": "v9"},
+            "ttl": "2h",
+        }
+    )
+    body = {
+        "user": {"id": "U1"},
+        "trigger_id": "T1",
+        "actions": [{"action_id": "deploy_prefill", "value": value}],
+    }
+    actions.handle_prefill(deps, ack, body, client)
+    assert client.named("views_open")
+    assert not [c for c in client.named("chat_postEphemeral") if "malformed" in c.get("text", "")]
+    text = json.dumps(client.named("views_open")[0]["view"])
+    assert '"initial_value": "v9"' in text
 
 
 def test_keep_button_clears_warning_without_changing_date():
@@ -346,12 +370,71 @@ def test_stack_change_updates_view_preserving_values():
     deps, _ = make_deps()
     client = FakeClient()
     body = _submit_body({"override_components": {"val": {"selected_options": [{"value": "web"}]}},
-                         "override::web": _text("v7")})  # fmt: skip
+                         "override::web__version": _text("v7")})  # fmt: skip
     body["view"].update(id="V1", hash="H1")
     actions.handle_modal_change(deps, Ack(), body, client)
     upd = client.named("views_update")[0]
     assert upd["view_id"] == "V1"
     assert '"initial_value": "v7"' in json.dumps(upd["view"])
+
+
+def test_handle_modal_change_rebuilds_all_fields_for_reselected_custom_chart_component():
+    deps, _ = make_deps()
+    client = FakeClient()
+    body = _submit_body(
+        {
+            "catalog": _select("custom"),
+            "override_components": {"val": {"selected_options": [{"value": "myservice"}]}},
+        }
+    )
+    body["view"].update(id="V1", hash="H1")
+    actions.handle_modal_change(deps, Ack(), body, client)
+    upd = client.named("views_update")[0]
+    text = json.dumps(upd["view"])
+    assert "override::myservice__image.tag" in text
+    assert "override::myservice__chart.version" in text
+    assert "override::myservice__replicas" in text
+    assert '"initial_value": "v1"' in text
+    assert '"initial_value": "1.2.3"' in text
+    assert '"initial_value": "3"' in text
+
+
+def test_default_overrides_golden_path_returns_version_default():
+    deps, _ = make_deps()
+    assert actions._default_overrides(deps, "demo", "api") == {"version": "1.0.0"}
+
+
+def test_default_overrides_custom_chart_returns_one_entry_per_overridable_field():
+    deps, _ = make_deps()
+    assert actions._default_overrides(deps, "demo", "myservice") == {
+        "image.tag": "latest",
+        "chart.version": "1.4.0",
+        "replicas": "2",
+    }
+
+
+def test_handle_prefill_reconstructs_nested_overrides_dict():
+    deps, _ = make_deps()
+    client, ack = FakeClient(), Ack()
+    value = json.dumps(
+        {
+            "catalog": "custom",
+            "stack": "shop",
+            "env": "staging",
+            "overrides": {"myservice": {"replicas": "2"}},
+            "ttl": "2h",
+        }
+    )
+    body = {
+        "user": {"id": "U1"},
+        "trigger_id": "T1",
+        "actions": [{"action_id": "deploy_prefill", "value": value}],
+    }
+    actions.handle_prefill(deps, ack, body, client)
+    view = client.named("views_open")[0]["view"]
+    text = json.dumps(view)
+    assert "override::myservice__replicas" in text
+    assert '"initial_value": "2"' in text
 
 
 def test_build_slack_app_registers():

@@ -3,9 +3,17 @@ from datetime import UTC, datetime
 import yaml
 
 import deployground
-from deployground.catalog import ResolvedComponent
-from deployground.config.models import Config, DeployTargetCfg, RepoRef, TokenRef
+from deployground.catalog import ResolvedComponent, ResolvedCustomComponent
+from deployground.config.models import (
+    Config,
+    DeployTargetCfg,
+    FieldRef,
+    RepoRef,
+    TokenRef,
+    WorkloadChartCfg,
+)
 from deployground.deploytarget.applicationset import ApplicationSetTarget
+from deployground.deploytarget.workloadchart import chart_fields
 from deployground.metadata import ComponentRecord, to_annotations, to_metadata_block
 
 REPO = RepoRef(owner="acme", name="deploys", branch="main", authRef=TokenRef(tokenEnv="TOK"))
@@ -47,6 +55,17 @@ def record(name: str) -> ComponentRecord:
         version="1.2.3",
         thread_ts="1.1",
         channel="C1",
+    )
+
+
+def custom_resolved(name: str) -> ResolvedCustomComponent:
+    return ResolvedCustomComponent(
+        chart=WorkloadChartCfg(
+            type="oci", repo="ghcr.io/acme", chart=f"{name}-chart", version="2.0.0"
+        ),
+        values={"replicas": 2, "image": {"repository": f"ghcr.io/acme/{name}", "tag": "v2"}},
+        imageRef=FieldRef(path="image.tag"),
+        ingressRef=None,
     )
 
 
@@ -116,6 +135,27 @@ def test_files_for_also_writes_the_reserved_system_file():
     )["deployground"]
     assert block["owner"] == other["owner"]
     assert block["env"] == other["env"]
+    # The reserved `system` file is matched by the same generator glob as every other
+    # component file, so it needs the same `chart.*` keys filled in too, resolved from the
+    # target's own default workloadChart (golden-path, in this test's CFG).
+    assert block["chart"] == {
+        "repoURL": "ghcr.io/rhysmcneill",
+        "chart": "golden-path-chart",
+        "targetRevision": deployground.__version__,
+        "path": "",
+    }
+
+
+def test_files_for_golden_path_component_carries_its_own_chart_fields():
+    content = yaml.safe_load(
+        next(c.content for c in make_files() if c.path == "dev/demo/api/config.yaml")
+    )
+    assert content["deployground"]["chart"] == {
+        "repoURL": "ghcr.io/rhysmcneill",
+        "chart": "golden-path-chart",
+        "targetRevision": deployground.__version__,
+        "path": "",
+    }
 
 
 def test_file_contains_workload_and_deployground_block():
@@ -135,7 +175,10 @@ def test_file_contains_workload_and_deployground_block():
     assert block["expiresAt"] == "2026-11-13T09:00:00Z"
     assert block["version"] == "1.2.3"
     assert block["threadTs"] == "1.1"
-    assert block == to_metadata_block(record("api"))
+    assert block == {
+        **to_metadata_block(record("api")),
+        "chart": chart_fields(CFG.workloadChart),
+    }
     web = by_path["dev/demo/web/config.yaml"]
     omitted = (
         "port",
@@ -200,7 +243,11 @@ def test_bootstrap_applicationset_templates_labels_annotations_and_subscription(
         "deployground.io/managed": "true",
     }
     annotations = tmpl["metadata"]["annotations"]
+    # "overrides" is a dict-valued annotation (JSON-encoded), not a templatable Go-template
+    # ref like the rest -- the ApplicationSet template only forwards the scalar fields.
     for key in to_annotations(record("api")):
+        if key == "deployground.io/overrides":
+            continue
         assert key in annotations
     assert annotations["deployground.io/owner-email"] == "{{deployground.ownerEmail}}"
     assert annotations["deployground.io/expires-at"] == "{{deployground.expiresAt}}"
@@ -217,9 +264,10 @@ def test_bootstrap_applicationset_templates_labels_annotations_and_subscription(
     sources = tmpl["spec"]["sources"]
     assert len(sources) == 2
     chart, values_ref = sources
-    assert chart["repoURL"] == "ghcr.io/rhysmcneill"
-    assert chart["chart"] == "golden-path-chart"
-    assert chart["targetRevision"] == deployground.__version__
+    assert chart["repoURL"] == "{{deployground.chart.repoURL}}"
+    assert chart["chart"] == "{{deployground.chart.chart}}"
+    assert chart["targetRevision"] == "{{deployground.chart.targetRevision}}"
+    assert chart["path"] == "{{deployground.chart.path}}"
     assert chart["helm"]["valueFiles"] == ["$values/{{path}}/{{path.filename}}"]
     assert values_ref["repoURL"] == "git@github.com:acme/deploys.git"
     assert values_ref["targetRevision"] == "main"
@@ -227,6 +275,11 @@ def test_bootstrap_applicationset_templates_labels_annotations_and_subscription(
 
 
 def test_bootstrap_applicationset_chart_source_uses_git_override():
+    # The `workloadChart` config no longer bakes anything into the bootstrap template --
+    # it only affects what's resolved per-file at write time (see test 1 in
+    # test_files_for_*_writes_the_reserved_system_file / custom-chart-component tests).
+    # This test now documents that a git-type override still yields the same four
+    # placeholders at bootstrap time, regardless of the override's own values.
     cfg = DeployTargetCfg(
         type="applicationset",
         repo="deploys",
@@ -241,9 +294,10 @@ def test_bootstrap_applicationset_chart_source_uses_git_override():
     manifests = ApplicationSetTarget(cfg, REPO).bootstrap_manifests(make_config())
     appset = yaml.safe_load(manifests["applicationset-dev.yaml"])
     chart = appset["spec"]["template"]["spec"]["sources"][0]
-    assert chart["repoURL"] == "https://github.com/acme/charts.git"
-    assert chart["targetRevision"] == "v1.0.0"
-    assert chart["path"] == "charts/custom"
+    assert chart["repoURL"] == "{{deployground.chart.repoURL}}"
+    assert chart["chart"] == "{{deployground.chart.chart}}"
+    assert chart["targetRevision"] == "{{deployground.chart.targetRevision}}"
+    assert chart["path"] == "{{deployground.chart.path}}"
 
 
 def test_bootstrap_applicationset_chart_source_pins_explicit_version():
@@ -256,7 +310,13 @@ def test_bootstrap_applicationset_chart_source_pins_explicit_version():
     manifests = ApplicationSetTarget(cfg, REPO).bootstrap_manifests(make_config())
     appset = yaml.safe_load(manifests["applicationset-dev.yaml"])
     chart = appset["spec"]["template"]["spec"]["sources"][0]
-    assert chart["targetRevision"] == "9.9.9"
+    # A pinned version, like the git override above, no longer affects the bootstrap
+    # template -- it only shows up in a generated file's deployground.chart.targetRevision
+    # at write time.
+    assert chart["repoURL"] == "{{deployground.chart.repoURL}}"
+    assert chart["chart"] == "{{deployground.chart.chart}}"
+    assert chart["targetRevision"] == "{{deployground.chart.targetRevision}}"
+    assert chart["path"] == "{{deployground.chart.path}}"
 
     cm = yaml.safe_load(manifests["argocd-notifications-cm.yaml"])
     assert cm["kind"] == "ConfigMap"
@@ -280,6 +340,52 @@ def test_bootstrap_one_applicationset_per_env_with_its_cluster():
     assert dev["spec"]["template"]["spec"]["destination"]["name"] == "dev-cluster"
     assert prod["spec"]["template"]["spec"]["destination"]["name"] == "prod-eks"
     assert prod["spec"]["generators"][0]["git"]["files"] == [{"path": "prod/*/*/config.yaml"}]
+
+
+def test_files_for_custom_chart_component_writes_values_and_uses_its_own_chart():
+    comp = custom_resolved("myservice")
+    changes = ApplicationSetTarget(CFG, REPO).files_for(
+        "demo", "dev", {"myservice": comp}, {"myservice": record("myservice")}
+    )
+    content = yaml.safe_load(next(c.content for c in changes if "myservice" in c.path))
+    assert content["replicas"] == 2  # from comp.values, not a golden-path field
+    assert content["image"] == {"repository": "ghcr.io/acme/myservice", "tag": "v2"}
+    assert content["deployground"]["component"] == "myservice"
+    assert content["deployground"]["chart"] == {
+        "repoURL": "ghcr.io/acme",
+        "chart": "myservice-chart",
+        "targetRevision": "2.0.0",
+        "path": "",
+    }
+
+
+def test_files_for_golden_path_and_custom_chart_components_coexist():
+    components = {"api": resolved("api"), "myservice": custom_resolved("myservice")}
+    records = {"api": record("api"), "myservice": record("myservice")}
+    changes = ApplicationSetTarget(CFG, REPO).files_for("demo", "dev", components, records)
+    by_path = {c.path: yaml.safe_load(c.content) for c in changes}
+    api = by_path["dev/demo/api/config.yaml"]
+    assert api["image"] == "ghcr.io/org/api:1.2.3"
+    assert api["port"] == 8080
+    myservice = by_path["dev/demo/myservice/config.yaml"]
+    assert myservice["replicas"] == 2
+    assert myservice["image"] == {"repository": "ghcr.io/acme/myservice", "tag": "v2"}
+    assert myservice["deployground"]["component"] == "myservice"
+
+
+def test_chart_fields_for_git_type_config_populates_three_keys_and_blanks_chart():
+    cfg = WorkloadChartCfg(
+        type="git",
+        gitRepo="https://github.com/acme/charts.git",
+        gitRef="v1.0.0",
+        chartPath="charts/custom",
+    )
+    assert chart_fields(cfg) == {
+        "repoURL": "https://github.com/acme/charts.git",
+        "targetRevision": "v1.0.0",
+        "path": "charts/custom",
+        "chart": "",
+    }
 
 
 def test_bootstrap_applicationset_targets_cluster_by_server_when_cluster_is_a_url():

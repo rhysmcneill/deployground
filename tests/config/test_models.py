@@ -4,7 +4,13 @@ from datetime import timedelta
 import pytest
 from pydantic import ValidationError
 
-from deployground.config.models import CatalogEntry, Config, WorkloadChartCfg, parse_duration
+from deployground.config.models import (
+    CatalogEntry,
+    Component,
+    Config,
+    WorkloadChartCfg,
+    parse_duration,
+)
 
 VALID = {
     "git": {
@@ -238,3 +244,58 @@ def test_workload_chart_git_with_repo_and_path_parses():
     )
     assert chart.gitRepo == "https://github.com/acme/charts.git"
     assert chart.chartPath == "charts/custom"
+
+
+def test_component_rejects_both_golden_path_and_chart_fields():
+    with pytest.raises(ValidationError, match="chart"):
+        Component.model_validate({
+            "image": "ghcr.io/x", "defaultVersion": "1",
+            "chart": {"type": "oci", "chart": "x"},
+        })
+
+
+def test_component_requires_image_ref_when_chart_is_set():
+    with pytest.raises(ValidationError, match="imageRef"):
+        Component.model_validate({"chart": {"type": "oci", "chart": "x"}})
+
+
+def test_component_requires_image_or_chart():
+    with pytest.raises(ValidationError, match="image"):
+        Component.model_validate({"defaultVersion": "1"})
+
+
+def test_custom_chart_component_is_valid():
+    comp = Component.model_validate({
+        "chart": {
+            "type": "oci",
+            "repo": "ghcr.io/my-org",
+            "chart": "myservice-chart",
+            "version": "1.4.0",
+        },
+        "values": {"replicas": 2},
+        "imageRef": {"path": "image.repository"},
+        "overridable": [{"path": "image.tag", "label": "Version"}],
+    })
+    assert comp.is_custom_chart is True
+
+
+def test_custom_chart_component_with_oci_chart_omitting_repo_and_chart_raises():
+    # Omitting `repo`/`chart` would silently inherit golden-path's own OCI chart
+    # coordinates -- the operator almost certainly didn't intend to render the
+    # golden-path chart with their own custom `values`.
+    with pytest.raises(ValidationError, match="repo.*chart"):
+        Component.model_validate({
+            "chart": {"version": "1.4.0"},
+            "values": {"replicas": 2},
+            "imageRef": {"path": "image.repository"},
+        })
+
+
+def test_golden_path_component_is_not_custom_chart():
+    comp = Component.model_validate({"image": "ghcr.io/x", "defaultVersion": "1"})
+    assert comp.is_custom_chart is False
+
+
+def test_golden_path_component_requires_default_version():
+    with pytest.raises(ValidationError, match="defaultVersion"):
+        Component.model_validate({"image": "ghcr.io/x"})

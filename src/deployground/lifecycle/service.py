@@ -15,7 +15,12 @@ from datetime import UTC, datetime, timedelta
 
 from deployground.authz.base import AuthzProvider
 from deployground.capability.base import Capability, RenderContext, RenderInputs
-from deployground.catalog import UnknownStack
+from deployground.catalog import (
+    ResolvedComponent,
+    UnknownStack,
+    chart_pin,
+    seed_chart_version_override,
+)
 from deployground.config.models import Environment, Lifecycle, RepoRef, parse_duration
 from deployground.git.base import GitClient, PrResult
 from deployground.index import StackIndex
@@ -180,9 +185,14 @@ class LifecycleService:
                     owner_email=owner_email,
                     env=env,
                     expires_at=expires_at,
-                    version=comp.version,
+                    version=(
+                        comp.version
+                        if isinstance(comp, ResolvedComponent)
+                        else chart_pin(comp.chart)
+                    ),
                     thread_ts=thread_ts,
                     channel=channel,
+                    overrides=seed_chart_version_override(comp, overrides.get(name, {})),
                 )
                 for name, comp in resolved.items()
             },
@@ -236,7 +246,7 @@ class LifecycleService:
                 "extended durably. Redeploy or destroy it."
             )
         resolved = self._ctx.catalog.resolve_versions(
-            record.catalog, {name: c.version for name, c in still_cataloged.items()}
+            record.catalog, {name: dict(c.overrides) for name, c in still_cataloged.items()}
         )
         # resolve_versions resolves every catalog-defined component regardless of which
         # names were in overrides, so narrow it back down to just the live, still-cataloged

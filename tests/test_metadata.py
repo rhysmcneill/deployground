@@ -92,6 +92,7 @@ def test_to_annotations_has_expected_keys():
         "deployground.io/version",
         "deployground.io/thread-ts",
         "deployground.io/channel",
+        "deployground.io/overrides",
     }
     assert all(isinstance(value, str) for value in annotations.values())
 
@@ -128,6 +129,36 @@ def test_expires_at_rejects_naive_datetime():
     block = to_metadata_block(_record()) | {"expiresAt": datetime(2026, 11, 13, 9, 0)}
     with pytest.raises(InvalidMetadata):
         parse_metadata_block({"deployground": block})
+
+
+def test_block_roundtrips_non_empty_overrides():
+    overrides = {"image.tag": "v9", "replicas": "5"}
+    record = ComponentRecord(**{**_record().__dict__, "overrides": overrides})
+    assert parse_metadata_block({"deployground": to_metadata_block(record)}) == record
+
+
+def test_annotations_roundtrip_non_empty_overrides():
+    overrides = {"image.tag": "v9", "replicas": "5"}
+    record = ComponentRecord(**{**_record().__dict__, "overrides": overrides})
+    assert from_annotations(to_annotations(record)) == record
+
+
+def test_from_annotations_defaults_overrides_to_empty_when_annotation_absent():
+    record = _record()
+    annotations = to_annotations(record)
+    del annotations["deployground.io/overrides"]
+    parsed = from_annotations(annotations)
+    assert parsed.overrides == {}
+
+
+def test_from_annotations_rejects_malformed_overrides_json():
+    """A corrupt overrides annotation must raise `InvalidMetadata`, not a bare
+    `json.JSONDecodeError` -- `StackIndex.rebuild()` only catches `InvalidMetadata`/
+    `yaml.YAMLError` per file so one bad file doesn't crash the whole rebuild."""
+    annotations = to_annotations(_record())
+    annotations["deployground.io/overrides"] = "{not valid json"
+    with pytest.raises(InvalidMetadata):
+        from_annotations(annotations)
 
 
 def test_annotations_roundtrip_component_record():

@@ -6,12 +6,14 @@ from deployground.config.models import DeployTargetCfg
 from deployground.deploytarget import make_deploy_target
 from deployground.deploytarget.application import ApplicationTarget
 from deployground.deploytarget.applicationset import ApplicationSetTarget
+from deployground.deploytarget.workloadchart import chart_source
 from deployground.index import StackIndex
 from deployground.metadata import to_annotations
 from tests.deploytarget.test_applicationset import (
     NAMES,
     REPO,
     TRIGGERS,
+    custom_resolved,
     make_config,
     record,
     resolved,
@@ -170,6 +172,35 @@ def test_index_rebuilds_from_application_files():
     stack = index.get("demo")
     assert stack is not None
     assert stack.components == {n: record(n) for n in NAMES}
+
+
+def test_application_custom_chart_component_uses_its_own_chart_and_values():
+    comp = custom_resolved("myservice")
+    changes = ApplicationTarget(CFG, REPO, CLUSTERS).files_for(
+        "demo", "dev", {"myservice": comp}, {"myservice": record("myservice")}
+    )
+    app = yaml.safe_load(next(c.content for c in changes if "myservice" in c.path))
+    source = app["spec"]["sources"][0]
+    expected_source = chart_source(comp.chart)
+    for key, value in expected_source.items():
+        assert source[key] == value
+    values = yaml.safe_load(source["helm"]["values"])
+    assert values == comp.values
+
+
+def test_application_golden_path_and_custom_chart_components_coexist():
+    components = {"api": resolved("api"), "myservice": custom_resolved("myservice")}
+    records = {"api": record("api"), "myservice": record("myservice")}
+    changes = ApplicationTarget(CFG, REPO, CLUSTERS).files_for("demo", "dev", components, records)
+    by_path = {c.path: yaml.safe_load(c.content) for c in changes}
+    api = by_path["dev/demo/api/app.yaml"]
+    api_values = yaml.safe_load(api["spec"]["sources"][0]["helm"]["values"])
+    assert api_values["image"] == "ghcr.io/org/api:1.2.3"
+    myservice = by_path["dev/demo/myservice/app.yaml"]
+    myservice_source = myservice["spec"]["sources"][0]
+    assert myservice_source["chart"] == components["myservice"].chart.chart
+    myservice_values = yaml.safe_load(myservice_source["helm"]["values"])
+    assert myservice_values == components["myservice"].values
 
 
 def test_factory_selects_by_type():
