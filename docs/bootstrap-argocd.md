@@ -11,9 +11,12 @@ deployground bootstrap --config my-config.yaml > bootstrap.yaml
 kubectl apply -f bootstrap.yaml
 ```
 
-This manual `kubectl apply` is the one-time initial setup, and the only path for the
-notifications ConfigMap. The `ApplicationSet` piece can instead be kept in sync automatically
-after that first review — see [`bootstrap.enabled`](#applying-each-piece) below.
+Running this `kubectl apply` by hand is only needed for the notifications ConfigMap (there's no
+automated path for it — see below) and, optionally, for a one-time by-hand review of the
+`ApplicationSet` *before* you turn on `bootstrap.enabled`. If you set `bootstrap.enabled: true`
+from your very first install, you never need to run this for the `ApplicationSet` at all — the
+chart's own PreSync hook applies it on every sync, starting with the first one. See
+[`bootstrap.enabled`](#applying-each-piece) below.
 
 For the default `applicationset` target you get:
 
