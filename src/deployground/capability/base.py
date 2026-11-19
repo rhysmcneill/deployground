@@ -29,7 +29,7 @@ class RenderInputs:
     catalog: str
     stack: str
     env: str
-    overrides: dict[str, str]  # component name -> version
+    overrides: dict[str, dict[str, str]]  # component name -> {path: value}
     ttl: str
     owner: str
     owner_email: str

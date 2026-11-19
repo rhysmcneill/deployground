@@ -296,7 +296,7 @@ def test_prefilled_button_opens_modal_with_values():
             "catalog": "shop",
             "stack": "shop",
             "env": "staging",
-            "overrides": {"web": "v9"},
+            "overrides": {"web": {"version": "v9"}},
             "ttl": "2h",
         }
     )

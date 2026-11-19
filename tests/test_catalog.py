@@ -41,6 +41,20 @@ BASE = {
                 "cache": {"image": "ghcr.io/my-org/cache", "defaultVersion": "v4.0.0"},
             }
         },
+        "demo": {
+            "components": {
+                "api": {
+                    "image": "ghcr.io/my-org/api",
+                    "defaultVersion": "1.0.0",
+                    "port": 8080,
+                },
+                "myservice": {
+                    "chart": {"type": "oci", "repo": "ghcr.io/my-org", "chart": "myservice"},
+                    "values": {"image": {"repository": "my-org/myservice", "tag": "v1"}},
+                    "imageRef": {"path": "image.tag"},
+                },
+            }
+        },
     },
     "capabilities": {"image-deploy": {"enabled": True, "allowedRegistries": ["ghcr.io/my-org"]}},
     "access": {"rules": [{"user": "U012ABC", "environments": ["*"]}]},
@@ -60,7 +74,7 @@ def make_catalog() -> Catalog:
 
 def test_single_service_is_stack_of_one():
     catalog = make_catalog()
-    assert catalog.list_entries() == ["api", "shop"]
+    assert catalog.list_entries() == ["api", "demo", "shop"]
     stack = catalog.get("api")
     assert list(stack.components) == ["api"]
     resolved = catalog.resolve_versions("api", {})
@@ -98,7 +112,7 @@ def test_resolve_uses_default_when_no_override():
 
 
 def test_resolve_applies_override_per_component():
-    resolved = make_catalog().resolve_versions("shop", {"worker": "v3.1.0"})
+    resolved = make_catalog().resolve_versions("shop", {"worker": {"version": "v3.1.0"}})
     assert resolved["worker"].version == "v3.1.0"
     assert resolved["web"].version == "v2.0.0"
     assert resolved["cache"].version == "v4.0.0"
@@ -106,7 +120,36 @@ def test_resolve_applies_override_per_component():
 
 def test_unknown_component_override_raises():
     with pytest.raises(UnknownComponent, match="nope"):
-        make_catalog().resolve_versions("shop", {"nope": "v9"})
+        make_catalog().resolve_versions("shop", {"nope": {"version": "v9"}})
+
+
+def test_resolve_versions_golden_path_unchanged_with_version_override():
+    resolved = make_catalog().resolve_versions("demo", {"api": {"version": "2.0.0"}})
+    assert resolved["api"].version == "2.0.0"
+
+
+def test_resolve_versions_golden_path_defaults_without_override():
+    resolved = make_catalog().resolve_versions("demo", {})
+    assert resolved["api"].version == "1.0.0"
+
+
+def test_resolve_versions_custom_chart_applies_values_override():
+    resolved = make_catalog().resolve_versions(
+        "demo", {"myservice": {"image.tag": "v9", "replicas": "5"}}
+    )
+    comp = resolved["myservice"]
+    assert comp.values["image"]["tag"] == "v9"
+    assert comp.values["replicas"] == "5"
+
+
+def test_resolve_versions_custom_chart_overrides_chart_version():
+    resolved = make_catalog().resolve_versions("demo", {"myservice": {"chart.version": "2.0.0"}})
+    assert resolved["myservice"].chart.version == "2.0.0"
+
+
+def test_resolve_versions_unknown_component_override_raises_demo():
+    with pytest.raises(UnknownComponent):
+        make_catalog().resolve_versions("demo", {"nope": {"version": "x"}})
 
 
 def test_unknown_stack_raises():

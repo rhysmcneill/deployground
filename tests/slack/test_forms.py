@@ -118,7 +118,7 @@ def test_stack_name_is_a_plain_text_input_with_hint():
 
 def test_override_picker_and_blocks_sit_between_catalog_and_stack_name():
     prefill = DeployInputs(
-        catalog="shop", stack="pr-123", env="dev", overrides={"web": "v9"}, ttl="2h"
+        catalog="shop", stack="pr-123", env="dev", overrides={"web": {"version": "v9"}}, ttl="2h"
     )
     view = build_deploy_modal("U1", catalog(), FakeAuthz({"dev"}), prefill)
     block_ids = [b.get("block_id") for b in view["blocks"] if b.get("block_id")]
@@ -140,7 +140,7 @@ def test_expires_in_defaults_to_24h():
 
 def test_prefill_populates_fields():
     prefill = DeployInputs(
-        catalog="shop", stack="pr-123", env="prod", overrides={"web": "v9"}, ttl="2h"
+        catalog="shop", stack="pr-123", env="prod", overrides={"web": {"version": "v9"}}, ttl="2h"
     )
     view = build_deploy_modal("U1", catalog(), FakeAuthz({"dev", "prod"}), prefill)
     assert block(view, "catalog")["element"]["initial_option"]["value"] == "shop"
@@ -156,7 +156,7 @@ def test_parse_submission_extracts_overrides_and_ttl():
     inputs, errors = parse_submission(state(ttl=" 2h ", overrides={"web": " v9 "}))
     assert errors == {}
     assert inputs == DeployInputs(
-        catalog="shop", stack="pr-123", env="dev", overrides={"web": "v9"}, ttl="2h"
+        catalog="shop", stack="pr-123", env="dev", overrides={"web": {"version": "v9"}}, ttl="2h"
     )
     inputs, _ = parse_submission(state(ttl="none"))
     assert inputs.ttl == "none" and inputs.overrides == {}
@@ -198,7 +198,7 @@ def test_empty_envs_view_has_no_inputs_and_no_submit():
 
 def test_catalog_and_override_picker_dispatch_actions():
     prefill = DeployInputs(
-        catalog="shop", stack="pr-123", env="dev", overrides={"web": "v9"}, ttl="2h"
+        catalog="shop", stack="pr-123", env="dev", overrides={"web": {"version": "v9"}}, ttl="2h"
     )
     view = build_deploy_modal("U1", catalog(), FakeAuthz({"dev"}), prefill)
     assert block(view, "catalog")["dispatch_action"] is True

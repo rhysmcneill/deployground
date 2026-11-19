@@ -115,7 +115,9 @@ def test_render_resolves_versions_from_catalog_not_stack_name():
 
 
 def test_render_applies_version_overrides():
-    changes = ImageDeployCapability().render(make_inputs(overrides={"web": "9.9.9"}), make_ctx())
+    changes = ImageDeployCapability().render(
+        make_inputs(overrides={"web": {"version": "9.9.9"}}), make_ctx()
+    )
     by_path = {c.path: yaml.safe_load(c.content) for c in changes}
     assert parse_metadata_block(by_path["dev/demo/web/config.yaml"]).version == "9.9.9"
     assert parse_metadata_block(by_path["dev/demo/api/config.yaml"]).version == "1.0.0"

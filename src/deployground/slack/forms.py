@@ -42,7 +42,7 @@ class DeployInputs:
     catalog: str
     stack: str
     env: str
-    overrides: dict[str, str] = field(default_factory=dict)
+    overrides: dict[str, dict[str, str]] = field(default_factory=dict)
     ttl: str = DEFAULT_TTL
 
 
@@ -68,7 +68,7 @@ def _input(block_id: str, label: str, element: dict[str, Any], **extra: Any) -> 
 def build_override_blocks(
     entry: CatalogEntry,
     selected_components: list[str],
-    values: Mapping[str, str] | None = None,
+    values: Mapping[str, dict[str, str]] | None = None,
 ) -> list[Block]:
     """One version input per selected component, prefilled to `values` or the default."""
     blocks: list[Block] = []
@@ -76,7 +76,7 @@ def build_override_blocks(
         comp = entry.components.get(name)
         if comp is None:
             continue
-        initial = (values or {}).get(name, comp.defaultVersion)
+        initial = (values or {}).get(name, {}).get("version", comp.defaultVersion)
         blocks.append(
             _input(
                 f"{OVERRIDE_PREFIX}{name}",
@@ -249,7 +249,7 @@ def parse_submission(
         except ValueError:
             errors["ttl"] = 'Invalid duration. Use e.g. "15m", "24h" or "none".'
 
-    overrides: dict[str, str] = {}
+    overrides: dict[str, dict[str, str]] = {}
     for block_id in view_state:
         if not block_id.startswith(OVERRIDE_PREFIX):
             continue
@@ -258,7 +258,7 @@ def parse_submission(
         if not value:
             errors[block_id] = "Version cannot be empty."
         else:
-            overrides[component_name] = value
+            overrides.setdefault(component_name, {})["version"] = value
 
     if errors or catalog is None or env is None:
         return None, errors

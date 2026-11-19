@@ -1,8 +1,17 @@
 """Stack catalog: lookup of configured stacks and per-component version resolution."""
 
 from collections.abc import Callable
+from typing import Any
 
-from deployground.config.models import CatalogEntry, Component, Config
+from deployground import dotpath
+from deployground.config.models import (
+    CatalogEntry,
+    Component,
+    Config,
+    FieldRef,
+    WorkloadChartCfg,
+    _Model,
+)
 
 
 def resolve_ingress_host(host: str | None, ingress_class: str | None, stack: str) -> str | None:
@@ -46,6 +55,15 @@ class ResolvedComponent(Component):
     version: str
 
 
+class ResolvedCustomComponent(_Model):
+    """A custom-chart component with per-deploy `values`/`chart.version` overrides applied."""
+
+    chart: WorkloadChartCfg
+    values: dict[str, Any]
+    imageRef: FieldRef
+    ingressRef: FieldRef | None = None
+
+
 class Catalog:
     def __init__(self, config_provider: Callable[[], Config]) -> None:
         self._config_provider = config_provider
@@ -60,14 +78,29 @@ class Catalog:
         return catalog[stack]
 
     def resolve_versions(
-        self, stack: str, overrides: dict[str, str]
-    ) -> dict[str, ResolvedComponent]:
+        self, stack: str, overrides: dict[str, dict[str, str]]
+    ) -> dict[str, ResolvedComponent | ResolvedCustomComponent]:
         stack_def = self.get(stack)
         for name in overrides:
             if name not in stack_def.components:
                 raise UnknownComponent(stack, name)
-        resolved: dict[str, ResolvedComponent] = {}
+        resolved: dict[str, ResolvedComponent | ResolvedCustomComponent] = {}
         for name, comp in stack_def.components.items():
-            version = overrides.get(name, comp.defaultVersion)
-            resolved[name] = ResolvedComponent(**comp.model_dump(), version=version)
+            if comp.is_custom_chart:
+                values = comp.values
+                chart = comp.chart
+                for path, value in overrides.get(name, {}).items():
+                    if path == "chart.version":
+                        chart = chart.model_copy(update={"version": value})
+                    else:
+                        values = dotpath.set_path(values, path, value)
+                resolved[name] = ResolvedCustomComponent(
+                    chart=chart,
+                    values=values,
+                    imageRef=comp.imageRef,
+                    ingressRef=comp.ingressRef,
+                )
+            else:
+                version = overrides.get(name, {}).get("version", comp.defaultVersion)
+                resolved[name] = ResolvedComponent(**comp.model_dump(), version=version)
         return resolved

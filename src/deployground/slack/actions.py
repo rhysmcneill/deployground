@@ -137,15 +137,15 @@ def handle_modal_change(deps: Deps, ack: Callable, body: dict[str, Any], client:
 
     picker = values.get(OVERRIDE_PICKER_BLOCK, {}).get(ACTION_ID) or {}
     chosen = [o["value"] for o in picker.get("selected_options") or []]
-    overrides: dict[str, str] = {}
+    overrides: dict[str, dict[str, str]] = {}
     for name in chosen:
         text = (values.get(f"{OVERRIDE_PREFIX}{name}", {}).get(ACTION_ID) or {}).get("value")
         if text:
-            overrides[name] = text
+            overrides[name] = {"version": text}
     catalog = selected("catalog")
     # Selected-but-untyped components get a row prefilled with the catalog default.
     for name in chosen:
-        overrides.setdefault(name, _default_version(deps, catalog, name))
+        overrides.setdefault(name, {"version": _default_version(deps, catalog, name)})
     ttl = ((values.get("ttl", {}).get(ACTION_ID) or {}).get("value") or "24h").strip() or "24h"
     stack = (values.get("stack", {}).get(ACTION_ID) or {}).get("value") or ""
     prefill = DeployInputs(

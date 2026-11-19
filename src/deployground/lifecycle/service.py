@@ -236,7 +236,7 @@ class LifecycleService:
                 "extended durably. Redeploy or destroy it."
             )
         resolved = self._ctx.catalog.resolve_versions(
-            record.catalog, {name: c.version for name, c in still_cataloged.items()}
+            record.catalog, {name: {"version": c.version} for name, c in still_cataloged.items()}
         )
         # resolve_versions resolves every catalog-defined component regardless of which
         # names were in overrides, so narrow it back down to just the live, still-cataloged

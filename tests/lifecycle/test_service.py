@@ -119,7 +119,7 @@ def test_deploy_denied_for_disallowed_env():
 
 def test_deploy_opens_single_pr_and_upserts_index():
     svc, git, _, index = make_service()
-    result = deploy(svc, overrides={"api": "1.2.3"})
+    result = deploy(svc, overrides={"api": {"version": "1.2.3"}})
     assert len(git.prs) == 1
     repo, _branch, _title, _changes, auto_merge = git.prs[0]
     assert repo == REPO and auto_merge is True
