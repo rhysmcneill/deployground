@@ -18,25 +18,19 @@ deployTarget:
   type: applicationset # or: application
   repo: gitops-nonprod # which configured repo holds the component files
   pathTemplate: "{env}/{stack}/{component}/config.yaml"
-  # Optional: where the workload chart comes from. Fully optional — omitting this entirely
-  # uses the default below (the published golden-path chart, pinned to this bot's own
-  # version). Uncomment to override:
+  # Optional: override the default workload chart (published golden-path-chart). Uncomment:
   # workloadChart:
   #   type: oci # or: git
-  #   repo: ghcr.io/rhysmcneill # oci: registry/org (chart name is appended)
+  #   repo: ghcr.io/rhysmcneill
   #   chart: golden-path-chart
-  #   version: null # oci: targetRevision; null -> this bot's own version
-  #   gitRepo: https://github.com/my-org/my-charts.git # git: full chart repo URL
-  #   gitRef: main # git: targetRevision
-  #   chartPath: charts/my-workload # git: path to the chart within gitRepo
+  #   version: null # null -> this bot's own version
+  #   gitRepo: https://github.com/my-org/my-charts.git
+  #   gitRef: main
+  #   chartPath: charts/my-workload
 
 environments:
   homelab:
-    # Either a server URL (targets that cluster directly; use
-    # https://kubernetes.default.svc for the cluster Argo CD itself runs in -- no Argo CD
-    # Cluster registration needed, so most single-cluster setups just use this) or a
-    # cluster *name* as registered in Argo CD (for teams managing several clusters from
-    # one Argo CD).
+    # A server URL (no Argo CD Cluster registration needed) or a registered cluster name.
     cluster: https://kubernetes.default.svc
     repo: gitops-nonprod
     autoMerge: true
@@ -49,10 +43,8 @@ environments:
     ttl: { default: none }
     requiresApproval: true
 
-# Catalog: reusable component definitions. Each entry is a named set of components (image,
-# default version, port, ...) that a user picks as "Catalog" in the deploy form. The entry's
-# name is NOT the name of a live deployment: each deploy also gets its own "Stack name" (typed
-# in the form), which becomes that deploy's namespace and URL.
+# Reusable component sets a user picks as "Catalog" in the deploy form. Not the deployment's
+# name -- each deploy also gets its own "Stack name", which becomes the namespace/URL.
 catalog:
   api:
     components:
@@ -65,14 +57,8 @@ catalog:
         defaultVersion: v4.5.6
         port: 3000
         ingressHost: "{stack}.apps.home.example.com" # {stack} keeps multi-deploy stacks unique
-        # Optional: names of pre-existing dockerconfigjson Secrets (e.g. `kubectl create
-        # secret docker-registry ...`) so kubelet can pull this image from a private
-        # registry (Harbor, private ECR, private ghcr, etc.):
-        # imagePullSecrets: [harbor-pull]
-        # Optional: a pre-existing ServiceAccount (e.g. annotated `eks.amazonaws.com/role-arn`
-        # for IRSA) the pod runs under, so the workload's own code can call AWS APIs at
-        # runtime. This does NOT help pull private images — that's imagePullSecrets above:
-        # serviceAccountName: my-irsa-sa
+        # imagePullSecrets: [harbor-pull] # pre-existing dockerconfigjson Secrets, for private images
+        # serviceAccountName: my-irsa-sa # pre-existing ServiceAccount the pod runs under (e.g. IRSA)
       admin:
         image: ghcr.io/my-org/admin
         defaultVersion: v1.0.0
@@ -85,10 +71,8 @@ catalog:
         secretRefs: [worker-env] # pre-existing Secrets injected with envFrom; no port/ingress
   custom-chart-example:
     components:
-      # A component can point at its own Helm chart instead of the built-in golden-path
-      # chart -- e.g. when the service already ships a chart of its own. `imageRef` tells
-      # deployground where the image repo lives inside `values`, so allowedRegistries keeps
-      # enforcing the same guardrail it does for golden-path's typed `image` field above.
+      # A custom chart instead of golden-path. imageRef points allowedRegistries at the
+      # image inside `values`, same guardrail golden-path's typed `image` field gets.
       myservice:
         chart:
           type: oci # or: git -- see myservice-git below for that shape
@@ -138,12 +122,8 @@ access:
 statusSource:
   type: argocd-notifications # or: argocd-api (pull; see docs/quickstart.md)
   webhookPath: /argocd/notifications
-  # Base URL (no path) Argo CD uses to reach the bot; defaults to the in-cluster Service DNS.
-  # Use an ingress URL if Argo CD runs in a different cluster.
-  # webhookUrl: http://deployground.deployground.svc.cluster.local
-  # Optional shared secret: the bot requires the X-Deployground-Token header to match
-  # the value of this env var.
-  secretRef: { tokenEnv: DG_WEBHOOK_TOKEN }
+  # webhookUrl: http://deployground.deployground.svc.cluster.local # default; set if Argo CD is elsewhere
+  secretRef: { tokenEnv: DG_WEBHOOK_TOKEN } # requires X-Deployground-Token to match this env var
   # argocd-api alternative:
   #   type: argocd-api
   #   url: https://argocd.example.com
