@@ -6,10 +6,11 @@ Secrets never appear in config: only references to environment variables.
 
 import re
 from datetime import timedelta
-from typing import Annotated, Literal, Self
+from typing import Annotated, Any, Literal, Self
 
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, model_validator
 
+from deployground import dotpath
 from deployground.metadata import RESERVED_COMPONENT
 
 _DURATION_RE = re.compile(r"^(\d+)([smh])$")
@@ -64,9 +65,53 @@ class Environment(_Model):
     requiresApproval: bool
 
 
+class WorkloadChartCfg(_Model):
+    """Source of the workload chart that renders each component's manifests.
+
+    Fully optional: a `deployTarget` with no `workloadChart` key still validates and gets
+    the default OCI chart (Deployground's own published `golden-path-chart`), pinned to the
+    running bot's own version at render time when `version` is unset — keeping the bot and
+    its default chart in lockstep across releases.
+    """
+
+    type: Literal["oci", "git"] = "oci"
+    # oci
+    repo: str | None = "ghcr.io/rhysmcneill"  # registry/org; chart name is appended
+    chart: str | None = "golden-path-chart"
+    version: str | None = None  # targetRevision; None -> deployground.__version__ at render time
+    # git (mirrors the existing colocated-in-target-repo behavior, for operators who want
+    # their own chart via git instead of OCI)
+    gitRepo: str | None = None  # full git URL
+    gitRef: str | None = None
+    chartPath: str | None = None
+
+    @model_validator(mode="after")
+    def _git_requires_repo_and_path(self) -> Self:
+        if self.type == "git" and not (self.gitRepo and self.chartPath):
+            raise ValueError(
+                "workloadChart type 'git' requires both 'gitRepo' and 'chartPath' to be set"
+            )
+        return self
+
+
+class FieldRef(_Model):
+    """Pointer to a value inside a custom-chart component's `values`, by dot-path."""
+
+    path: str
+
+
+class OverridableField(_Model):
+    """A `values` field a custom-chart component exposes for per-deploy override."""
+
+    path: str
+    label: str
+
+
 class Component(_Model):
-    image: str
-    defaultVersion: str
+    # Golden-path fields. Required for golden-path components; left unset (None) for
+    # custom-chart components, which use `imageRef`/`ingressRef` into `values` instead.
+    image: str | None = None
+    defaultVersion: str | None = None
     port: int | None = None
     replicas: int = 1
     ingressHost: str | None = None
@@ -86,6 +131,31 @@ class Component(_Model):
     # cluster's default IngressClass. Purely a routing choice — unrelated to the two fields
     # above.
     ingressClassName: str | None = None
+
+    # Custom-chart fields. `chart` selects an arbitrary Helm chart (instead of the built-in
+    # golden-path chart) and `values` supplies its Helm values. `imageRef`/`ingressRef` point,
+    # by dot-path into `values`, at the fields that would otherwise be the golden-path's typed
+    # `image`/`ingressHost` equivalents. `overridable` lists `values` fields exposed for
+    # per-deploy override (e.g. in Slack forms).
+    chart: WorkloadChartCfg | None = None
+    values: dict[str, Any] = Field(default_factory=dict)
+    imageRef: FieldRef | None = None
+    ingressRef: FieldRef | None = None
+    overridable: list[OverridableField] = Field(default_factory=list)
+
+    @property
+    def is_custom_chart(self) -> bool:
+        return self.chart is not None
+
+    @model_validator(mode="after")
+    def _golden_path_xor_chart(self) -> Self:
+        if self.chart is not None and self.image is not None:
+            raise ValueError("component cannot set both 'chart' and golden-path 'image'")
+        if self.chart is None and self.image is None:
+            raise ValueError("component must set either 'image' (golden-path) or 'chart'")
+        if self.chart is not None and self.imageRef is None:
+            raise ValueError("imageRef is required when chart is set")
+        return self
 
 
 class CatalogEntry(_Model):
@@ -121,35 +191,6 @@ class AccessRule(_Model):
 
 class Access(_Model):
     rules: list[AccessRule] = Field(default_factory=list)
-
-
-class WorkloadChartCfg(_Model):
-    """Source of the workload chart that renders each component's manifests.
-
-    Fully optional: a `deployTarget` with no `workloadChart` key still validates and gets
-    the default OCI chart (Deployground's own published `golden-path-chart`), pinned to the
-    running bot's own version at render time when `version` is unset — keeping the bot and
-    its default chart in lockstep across releases.
-    """
-
-    type: Literal["oci", "git"] = "oci"
-    # oci
-    repo: str | None = "ghcr.io/rhysmcneill"  # registry/org; chart name is appended
-    chart: str | None = "golden-path-chart"
-    version: str | None = None  # targetRevision; None -> deployground.__version__ at render time
-    # git (mirrors the existing colocated-in-target-repo behavior, for operators who want
-    # their own chart via git instead of OCI)
-    gitRepo: str | None = None  # full git URL
-    gitRef: str | None = None
-    chartPath: str | None = None
-
-    @model_validator(mode="after")
-    def _git_requires_repo_and_path(self) -> Self:
-        if self.type == "git" and not (self.gitRepo and self.chartPath):
-            raise ValueError(
-                "workloadChart type 'git' requires both 'gitRepo' and 'chartPath' to be set"
-            )
-        return self
 
 
 class DeployTargetCfg(_Model):
@@ -214,10 +255,21 @@ class Config(_Model):
         ]
         for catalog_name, entry in self.catalog.items():
             for comp_name, comp in entry.components.items():
-                if not any(_in_registry(comp.image, r) for r in allowed):
+                if comp.is_custom_chart:
+                    try:
+                        image = dotpath.get_path(comp.values, comp.imageRef.path)
+                    except KeyError:
+                        errors.append(
+                            f"catalog entry {catalog_name!r} component {comp_name!r}: "
+                            f"imageRef path {comp.imageRef.path!r} not found in values"
+                        )
+                        continue
+                else:
+                    image = comp.image
+                if not any(_in_registry(image, r) for r in allowed):
                     errors.append(
                         f"catalog entry {catalog_name!r} component {comp_name!r} "
-                        f"image {comp.image!r} is not under any allowed registry {allowed!r}"
+                        f"image {image!r} is not under any allowed registry {allowed!r}"
                     )
 
         for i, rule in enumerate(self.access.rules):
