@@ -31,6 +31,8 @@ from deployground.slack.forms import (
     OVERRIDE_PREFIX,
     STATIC_SELECT_LIMIT,
     DeployInputs,
+    _default_override_value,
+    _overridable_fields,
     build_deploy_modal,
     parse_submission,
 )
@@ -112,7 +114,7 @@ def handle_prefill(deps: Deps, ack: Callable, body: dict[str, Any], client: Any)
             catalog=data["catalog"],
             stack=data["stack"],
             env=data["env"],
-            overrides=dict(data.get("overrides") or {}),
+            overrides={k: dict(v) for k, v in (data.get("overrides") or {}).items()},
             ttl=data.get("ttl") or "24h",
         )
     except (ValueError, KeyError, TypeError):
@@ -137,15 +139,16 @@ def handle_modal_change(deps: Deps, ack: Callable, body: dict[str, Any], client:
 
     picker = values.get(OVERRIDE_PICKER_BLOCK, {}).get(ACTION_ID) or {}
     chosen = [o["value"] for o in picker.get("selected_options") or []]
+    catalog = selected("catalog")
     overrides: dict[str, dict[str, str]] = {}
     for name in chosen:
-        text = (values.get(f"{OVERRIDE_PREFIX}{name}", {}).get(ACTION_ID) or {}).get("value")
-        if text:
-            overrides[name] = {"version": text}
-    catalog = selected("catalog")
-    # Selected-but-untyped components get a row prefilled with the catalog default.
-    for name in chosen:
-        overrides.setdefault(name, {"version": _default_version(deps, catalog, name)})
+        defaults = _default_overrides(deps, catalog, name)
+        comp_overrides: dict[str, str] = {}
+        for path, default in defaults.items():
+            block_id = f"{OVERRIDE_PREFIX}{name}__{path}"
+            text = (values.get(block_id, {}).get(ACTION_ID) or {}).get("value")
+            comp_overrides[path] = text if text else default
+        overrides[name] = comp_overrides
     ttl = ((values.get("ttl", {}).get(ACTION_ID) or {}).get("value") or "24h").strip() or "24h"
     stack = (values.get("stack", {}).get(ACTION_ID) or {}).get("value") or ""
     prefill = DeployInputs(
@@ -158,11 +161,15 @@ def handle_modal_change(deps: Deps, ack: Callable, body: dict[str, Any], client:
     )
 
 
-def _default_version(deps: Deps, catalog: str, component: str) -> str:
+def _default_overrides(deps: Deps, catalog: str, component: str) -> dict[str, str]:
     try:
-        return deps.catalog.get(catalog).components[component].defaultVersion
+        comp = deps.catalog.get(catalog).components[component]
     except KeyError:
-        return ""
+        return {}
+    return {
+        field.path: _default_override_value(comp, field.path)
+        for field in _overridable_fields(comp)
+    }
 
 
 def handle_catalog_options(deps: Deps, ack: Callable, body: dict[str, Any]) -> None:

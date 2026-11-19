@@ -39,6 +39,21 @@ CFG = {
             }
         },
         "api": {"components": {"api": {"image": "i/api", "defaultVersion": "v1.0.0"}}},
+        "demo": {
+            "components": {
+                "api": {"image": "i/api", "defaultVersion": "1.0.0"},
+                "myservice": {
+                    "chart": {"version": "1.4.0"},
+                    "imageRef": {"path": "image.tag"},
+                    "values": {"image": {"tag": "latest"}, "replicas": 2},
+                    "overridable": [
+                        {"path": "image.tag", "label": "Image tag"},
+                        {"path": "chart.version", "label": "Chart version"},
+                        {"path": "replicas", "label": "Replicas"},
+                    ],
+                },
+            }
+        },
         "custom": {
             "components": {
                 "myservice": {
