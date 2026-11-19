@@ -114,7 +114,10 @@ def handle_prefill(deps: Deps, ack: Callable, body: dict[str, Any], client: Any)
             catalog=data["catalog"],
             stack=data["stack"],
             env=data["env"],
-            overrides={k: dict(v) for k, v in (data.get("overrides") or {}).items()},
+            overrides={
+                k: (v if isinstance(v, dict) else {"version": v})
+                for k, v in (data.get("overrides") or {}).items()
+            },
             ttl=data.get("ttl") or "24h",
         )
     except (ValueError, KeyError, TypeError):

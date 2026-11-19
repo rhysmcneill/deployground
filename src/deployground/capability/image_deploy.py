@@ -35,9 +35,12 @@ class ImageDeployCapability:
                 owner_email=inputs.owner_email,
                 env=inputs.env,
                 expires_at=inputs.expires_at,
-                version=comp.version,
+                version=(
+                    comp.version if isinstance(comp, ResolvedComponent) else comp.chart.version
+                ),
                 thread_ts=inputs.thread_ts,
                 channel=inputs.channel,
+                overrides=dict(inputs.overrides.get(name, {})),
             )
             for name, comp in components.items()
         }
@@ -63,6 +66,11 @@ class ImageDeployCapability:
                 ingress_host = comp.ingressHost
             else:
                 image = dotpath.get_path(comp.values, comp.imageRef.path)
+                if not isinstance(image, str):
+                    raise GuardrailViolation(
+                        f"component {name!r} imageRef path {comp.imageRef.path!r} resolved to "
+                        f"a non-string value {image!r}"
+                    )
                 ingress_host = (
                     dotpath.get_path(comp.values, comp.ingressRef.path)
                     if comp.ingressRef is not None

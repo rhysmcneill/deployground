@@ -112,7 +112,8 @@ class Catalog:
                         raise DisallowedOverride(stack, name, path)
                 for path, value in comp_overrides.items():
                     if path == "chart.version":
-                        chart = chart.model_copy(update={"version": value})
+                        field_name = "version" if chart.type == "oci" else "gitRef"
+                        chart = chart.model_copy(update={field_name: value})
                     else:
                         values = dotpath.set_path(values, path, value)
                 resolved[name] = ResolvedCustomComponent(

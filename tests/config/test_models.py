@@ -266,12 +266,29 @@ def test_component_requires_image_or_chart():
 
 def test_custom_chart_component_is_valid():
     comp = Component.model_validate({
-        "chart": {"type": "oci", "chart": "myservice-chart", "version": "1.4.0"},
+        "chart": {
+            "type": "oci",
+            "repo": "ghcr.io/my-org",
+            "chart": "myservice-chart",
+            "version": "1.4.0",
+        },
         "values": {"replicas": 2},
         "imageRef": {"path": "image.repository"},
         "overridable": [{"path": "image.tag", "label": "Version"}],
     })
     assert comp.is_custom_chart is True
+
+
+def test_custom_chart_component_with_oci_chart_omitting_repo_and_chart_raises():
+    # Omitting `repo`/`chart` would silently inherit golden-path's own OCI chart
+    # coordinates -- the operator almost certainly didn't intend to render the
+    # golden-path chart with their own custom `values`.
+    with pytest.raises(ValidationError, match="repo.*chart"):
+        Component.model_validate({
+            "chart": {"version": "1.4.0"},
+            "values": {"replicas": 2},
+            "imageRef": {"path": "image.repository"},
+        })
 
 
 def test_golden_path_component_is_not_custom_chart():

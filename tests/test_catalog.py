@@ -55,12 +55,31 @@ BASE = {
                     "port": 8080,
                 },
                 "myservice": {
-                    "chart": {"type": "oci", "repo": "ghcr.io/my-org", "chart": "myservice"},
+                    "chart": {
+                        "type": "oci",
+                        "repo": "ghcr.io/my-org",
+                        "chart": "myservice",
+                        "version": "v1",
+                    },
                     "values": {"image": {"repository": "my-org/myservice", "tag": "v1"}},
                     "imageRef": {"path": "image.tag"},
                     "overridable": [
                         {"path": "image.tag", "label": "Image tag"},
                         {"path": "replicas", "label": "Replicas"},
+                    ],
+                },
+                "gitservice": {
+                    "chart": {
+                        "type": "git",
+                        "gitRepo": "https://github.com/my-org/charts.git",
+                        "gitRef": "main",
+                        "chartPath": "charts/gitservice",
+                    },
+                    "values": {"image": {"repository": "my-org/gitservice", "tag": "v1"}},
+                    "imageRef": {"path": "image.tag"},
+                    "overridable": [
+                        {"path": "image.tag", "label": "Image tag"},
+                        {"path": "chart.version", "label": "Chart version (git ref)"},
                     ],
                 },
             }
@@ -191,6 +210,16 @@ def test_resolve_versions_custom_chart_allows_declared_overridable_paths():
 def test_resolve_versions_custom_chart_always_allows_chart_version():
     resolved = make_catalog().resolve_versions("demo", {"myservice": {"chart.version": "9.9.9"}})
     assert resolved["myservice"].chart.version == "9.9.9"
+
+
+def test_resolve_versions_custom_chart_version_override_sets_git_ref_for_git_charts():
+    # chart.version means "gitRef" for a git-type chart; setting `.version` directly would
+    # be read by nothing (workloadchart.py only reads `.version` for type == "oci").
+    resolved = make_catalog().resolve_versions(
+        "demo", {"gitservice": {"chart.version": "feature-branch"}}
+    )
+    assert resolved["gitservice"].chart.gitRef == "feature-branch"
+    assert resolved["gitservice"].chart.version is None
 
 
 def test_unknown_stack_raises():

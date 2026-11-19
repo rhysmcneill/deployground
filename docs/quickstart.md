@@ -53,6 +53,7 @@ myservice:
     chart: myservice-chart
     version: "1.4.0" # the chart's own version -- may itself be made overridable below
   values: # operator-authored values, layered by Helm on top of the chart's own
+    image: { repository: ghcr.io/my-org/myservice, tag: "v2" }
     replicas: 2 # values.yaml defaults -- deployground never inspects this shape
   imageRef:
     path: image.repository # REQUIRED: where the image repo lives in `values`, so
@@ -75,7 +76,9 @@ form, including `chart.version` itself.
 
 `allowedRegistries` and `ingressDomains` still apply to custom-chart components exactly as they
 do for golden-path ones -- deployground resolves the image/ingress host via `imageRef`/`ingressRef`
-into `values` instead of reading the typed `image`/`ingressHost` fields directly.
+into `values` instead of reading the typed `image`/`ingressHost` fields directly. For a custom
+chart, that coverage is only as complete as the paths the operator declares: a chart with sidecar
+images, or an Ingress configured some other way, has no deployground-visible path to check.
 
 Validate it and preview what will be applied (next section) with:
 

@@ -13,6 +13,7 @@ Annotations use the same fields with kebab-case keys under `deployground.io/`.
 All annotation values are strings; a missing expiry is the string `"none"`.
 """
 
+import json
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
@@ -47,6 +48,7 @@ class ComponentRecord:
     version: str
     thread_ts: str
     channel: str
+    overrides: dict[str, str] = field(default_factory=dict)
 
 
 @dataclass
@@ -72,6 +74,7 @@ _BLOCK_KEYS = frozenset(
         "version",
         "threadTs",
         "channel",
+        "overrides",
     }
 )
 
@@ -111,6 +114,7 @@ def to_metadata_block(record: ComponentRecord) -> dict[str, Any]:
         "version": record.version,
         "threadTs": record.thread_ts,
         "channel": record.channel,
+        "overrides": dict(record.overrides),
     }
 
 
@@ -130,9 +134,15 @@ def _record_from_block(block: Any) -> ComponentRecord:
     if missing:
         raise InvalidMetadata(f"{BLOCK_KEY!r} block is missing keys: {', '.join(missing)}")
 
-    for key in _BLOCK_KEYS - {"expiresAt"}:
+    for key in _BLOCK_KEYS - {"expiresAt", "overrides"}:
         if not isinstance(block[key], str):
             raise InvalidMetadata(f"{key} must be a string")
+
+    overrides_value = block["overrides"]
+    if not isinstance(overrides_value, dict) or not all(
+        isinstance(k, str) and isinstance(v, str) for k, v in overrides_value.items()
+    ):
+        raise InvalidMetadata("overrides must be a mapping of string to string")
 
     catalog_value = block.get("catalog", block["stack"])
     if not isinstance(catalog_value, str):
@@ -153,6 +163,7 @@ def _record_from_block(block: Any) -> ComponentRecord:
         expires_at=expires_at,
         version=block["version"],
         thread_ts=block["threadTs"],
+        overrides=dict(overrides_value),
         channel=block["channel"],
     )
 
@@ -171,6 +182,7 @@ def to_annotations(record: ComponentRecord) -> dict[str, str]:
         f"{ANNOTATION_PREFIX}version": record.version,
         f"{ANNOTATION_PREFIX}thread-ts": record.thread_ts,
         f"{ANNOTATION_PREFIX}channel": record.channel,
+        f"{ANNOTATION_PREFIX}overrides": json.dumps(record.overrides),
     }
 
 
@@ -202,6 +214,8 @@ def from_annotations(annotations: Any) -> ComponentRecord:
         block["expiresAt"] = None
     if "catalog" not in block and "stack" in block:
         block["catalog"] = block["stack"]
+    overrides_raw = annotations.get(f"{ANNOTATION_PREFIX}overrides")
+    block["overrides"] = json.loads(overrides_raw) if overrides_raw is not None else {}
     return _record_from_block(block)
 
 

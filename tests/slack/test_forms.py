@@ -43,7 +43,12 @@ CFG = {
             "components": {
                 "api": {"image": "i/api", "defaultVersion": "1.0.0"},
                 "myservice": {
-                    "chart": {"version": "1.4.0"},
+                    "chart": {
+                        "type": "oci",
+                        "repo": "i",
+                        "chart": "myservice",
+                        "version": "1.4.0",
+                    },
                     "imageRef": {"path": "image.tag"},
                     "values": {"image": {"tag": "latest"}, "replicas": 2},
                     "overridable": [
@@ -57,7 +62,12 @@ CFG = {
         "custom": {
             "components": {
                 "myservice": {
-                    "chart": {"version": "1.2.3"},
+                    "chart": {
+                        "type": "oci",
+                        "repo": "i",
+                        "chart": "myservice",
+                        "version": "1.2.3",
+                    },
                     "imageRef": {"path": "image.tag"},
                     "values": {"image": {"tag": "v1"}, "replicas": 3},
                     "overridable": [
@@ -67,7 +77,12 @@ CFG = {
                     ],
                 },
                 "bare": {
-                    "chart": {"version": "1.0.0"},
+                    "chart": {
+                        "type": "oci",
+                        "repo": "i",
+                        "chart": "bare",
+                        "version": "1.0.0",
+                    },
                     "imageRef": {"path": "image.tag"},
                     "values": {"image": {"tag": "v1"}},
                     "overridable": [],

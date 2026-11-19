@@ -313,6 +313,30 @@ def test_prefilled_button_opens_modal_with_values():
     assert '"initial_value": "v9"' in text and '"initial_value": "2h"' in text
 
 
+def test_handle_prefill_accepts_old_flat_overrides_shape():
+    deps, _ = make_deps()
+    client, ack = FakeClient(), Ack()
+    value = json.dumps(
+        {
+            "catalog": "shop",
+            "stack": "shop",
+            "env": "staging",
+            "overrides": {"web": "v9"},
+            "ttl": "2h",
+        }
+    )
+    body = {
+        "user": {"id": "U1"},
+        "trigger_id": "T1",
+        "actions": [{"action_id": "deploy_prefill", "value": value}],
+    }
+    actions.handle_prefill(deps, ack, body, client)
+    assert client.named("views_open")
+    assert not [c for c in client.named("chat_postEphemeral") if "malformed" in c.get("text", "")]
+    text = json.dumps(client.named("views_open")[0]["view"])
+    assert '"initial_value": "v9"' in text
+
+
 def test_keep_button_clears_warning_without_changing_date():
     deps, acks = make_deps()
     actions.handle_keep(deps, Ack(), _button_body("keep::shop"), FakeClient())

@@ -92,6 +92,7 @@ def test_to_annotations_has_expected_keys():
         "deployground.io/version",
         "deployground.io/thread-ts",
         "deployground.io/channel",
+        "deployground.io/overrides",
     }
     assert all(isinstance(value, str) for value in annotations.values())
 
@@ -128,6 +129,24 @@ def test_expires_at_rejects_naive_datetime():
     block = to_metadata_block(_record()) | {"expiresAt": datetime(2026, 11, 13, 9, 0)}
     with pytest.raises(InvalidMetadata):
         parse_metadata_block({"deployground": block})
+
+
+def test_block_roundtrips_non_empty_overrides():
+    record = ComponentRecord(**{**_record().__dict__, "overrides": {"image.tag": "v9", "replicas": "5"}})
+    assert parse_metadata_block({"deployground": to_metadata_block(record)}) == record
+
+
+def test_annotations_roundtrip_non_empty_overrides():
+    record = ComponentRecord(**{**_record().__dict__, "overrides": {"image.tag": "v9", "replicas": "5"}})
+    assert from_annotations(to_annotations(record)) == record
+
+
+def test_from_annotations_defaults_overrides_to_empty_when_annotation_absent():
+    record = _record()
+    annotations = to_annotations(record)
+    del annotations["deployground.io/overrides"]
+    parsed = from_annotations(annotations)
+    assert parsed.overrides == {}
 
 
 def test_annotations_roundtrip_component_record():

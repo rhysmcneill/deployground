@@ -11,6 +11,43 @@ from deployground.deploytarget.applicationset import ApplicationSetTarget
 from deployground.metadata import ComponentRecord, StackRecord, parse_metadata_block
 from tests.deploytarget.test_applicationset import CFG, REPO, make_config
 
+
+def make_cfg_with_custom_chart() -> Config:
+    base = make_config().model_dump()
+    base["environments"]["dev"]["ttl"] = {"default": "24h", "max": "72h"}
+    base["catalog"] = {
+        "demo": {
+            "components": {
+                "api": {
+                    "image": "ghcr.io/org/api",
+                    "defaultVersion": "1.0.0",
+                    "port": 8080,
+                },
+                "myservice": {
+                    "chart": {
+                        "type": "oci",
+                        "repo": "ghcr.io/org",
+                        "chart": "myservice-chart",
+                        "version": "1.4.0",
+                    },
+                    "values": {"image": {"repository": "ghcr.io/org/myservice", "tag": "v1"}},
+                    "imageRef": {"path": "image.repository"},
+                    "overridable": [
+                        {"path": "image.tag", "label": "Version"},
+                        {"path": "replicas", "label": "Replicas"},
+                    ],
+                },
+            }
+        }
+    }
+    base["capabilities"] = {
+        "image-deploy": {
+            "allowedRegistries": ["ghcr.io/org"],
+            "ingressDomains": ["home.example"],
+        }
+    }
+    return Config.model_validate(base)
+
 EXPIRES = datetime(2026, 11, 13, 9, 0, tzinfo=UTC)
 
 
@@ -195,6 +232,17 @@ def test_check_guardrails_skips_ingress_check_when_no_ingress_ref():
     ImageDeployCapability._check_guardrails({"myservice": comp}, ctx)
 
 
+def test_check_guardrails_raises_guardrail_violation_for_non_string_image_ref_value():
+    ctx = make_ctx()
+    comp = ResolvedCustomComponent(
+        chart=WorkloadChartCfg(),
+        values={"image": {"repository": {"nested": "dict"}}},
+        imageRef=FieldRef(path="image.repository"),
+    )
+    with pytest.raises(GuardrailViolation, match="non-string"):
+        ImageDeployCapability._check_guardrails({"myservice": comp}, ctx)
+
+
 def test_check_guardrails_blocks_disallowed_ingress_domain_for_custom_chart():
     ctx = make_ctx()
     comp = ResolvedCustomComponent(
@@ -208,6 +256,20 @@ def test_check_guardrails_blocks_disallowed_ingress_domain_for_custom_chart():
     )
     with pytest.raises(GuardrailViolation, match="demo.evil.example"):
         ImageDeployCapability._check_guardrails({"myservice": comp}, ctx)
+
+
+def test_render_succeeds_and_sets_chart_version_for_custom_chart_component():
+    cfg = make_cfg_with_custom_chart()
+    ctx = RenderContext(
+        catalog=Catalog(lambda: cfg),
+        deploy_target=ApplicationSetTarget(CFG, REPO),
+        capability_cfg=cfg.capabilities["image-deploy"],
+        environments=cfg.environments,
+    )
+    changes = ImageDeployCapability().render(make_inputs(catalog="demo"), ctx)
+    by_path = {c.path: yaml.safe_load(c.content) for c in changes}
+    record = parse_metadata_block(by_path["dev/demo/myservice/config.yaml"])
+    assert record.version == "1.4.0"
 
 
 def test_needs_approval_follows_env():

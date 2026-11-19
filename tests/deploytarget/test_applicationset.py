@@ -243,7 +243,11 @@ def test_bootstrap_applicationset_templates_labels_annotations_and_subscription(
         "deployground.io/managed": "true",
     }
     annotations = tmpl["metadata"]["annotations"]
+    # "overrides" is a dict-valued annotation (JSON-encoded), not a templatable Go-template
+    # ref like the rest -- the ApplicationSet template only forwards the scalar fields.
     for key in to_annotations(record("api")):
+        if key == "deployground.io/overrides":
+            continue
         assert key in annotations
     assert annotations["deployground.io/owner-email"] == "{{deployground.ownerEmail}}"
     assert annotations["deployground.io/expires-at"] == "{{deployground.expiresAt}}"

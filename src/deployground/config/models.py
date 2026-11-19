@@ -157,6 +157,13 @@ class Component(_Model):
             raise ValueError("imageRef is required when chart is set")
         if self.chart is None and self.defaultVersion is None:
             raise ValueError("defaultVersion is required for golden-path components")
+        if self.chart is not None and self.chart.type == "oci":
+            missing = {"repo", "chart", "version"} - self.chart.model_fields_set
+            if missing:
+                raise ValueError(
+                    f"custom chart requires explicit {sorted(missing)} (oci charts can't rely "
+                    "on the golden-path chart's own defaults)"
+                )
         return self
 
 

@@ -7,7 +7,7 @@ from deployground.capability.base import RenderInputs
 from deployground.git.base import FileChange, PrResult
 from deployground.lifecycle.service import Denied, LifecycleService
 from deployground.metadata import ComponentRecord, StackRecord
-from tests.capability.test_image_deploy import make_cfg, make_ctx
+from tests.capability.test_image_deploy import make_cfg, make_cfg_with_custom_chart, make_ctx
 from tests.deploytarget.test_applicationset import REPO
 
 NOW = datetime(2026, 11, 12, 9, 0, tzinfo=UTC)
@@ -376,6 +376,41 @@ def test_failed_open_pr_leaves_no_reservation():
     git.open_pr = good_open
     deploy(svc)
     assert len(git.prs) == 1
+
+
+def test_deploy_mixed_golden_path_and_custom_chart_stack_sets_versions():
+    config = make_cfg_with_custom_chart()
+    svc, git, _, index = make_service(config=config)
+    result = deploy(
+        svc,
+        catalog="demo",
+        stack="demo",
+        overrides={"myservice": {"image.tag": "v9", "replicas": "5"}},
+    )
+    assert len(git.prs) == 1
+    record = result.stack_record
+    assert record.components["api"].version == "1.0.0"
+    assert record.components["myservice"].version == "1.4.0"
+    assert record.components["myservice"].overrides == {"image.tag": "v9", "replicas": "5"}
+
+
+def test_extend_replays_custom_chart_overrides_verbatim():
+    config = make_cfg_with_custom_chart()
+    svc, git, _, index = make_service(config=config)
+    deploy(
+        svc,
+        catalog="demo",
+        stack="demo",
+        overrides={"myservice": {"image.tag": "v9", "replicas": "5"}},
+    )
+    svc.extend("U1", "demo", "6h")
+    changes = git.prs[-1][3]
+    by_path = {c.path: yaml.safe_load(c.content) for c in changes if c.path.endswith(".yaml")}
+    myservice_content = by_path["dev/demo/myservice/config.yaml"]
+    assert myservice_content["image"]["tag"] == "v9"
+    assert myservice_content["replicas"] == "5"
+    updated = index.records["demo"]
+    assert updated.components["myservice"].overrides == {"image.tag": "v9", "replicas": "5"}
 
 
 def test_destroy_returns_pr_state():
