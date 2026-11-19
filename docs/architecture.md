@@ -24,7 +24,7 @@ status sources each already have two implementations, capabilities its first (`i
 and one, the chat layer, is still a stated direction rather than code:
 
 - **The chat layer** — Slack today, directly (there's no platform abstraction yet; that's the
-  honest state of Step 1). Adding Microsoft Teams, Discord, or another tool means extracting that
+  honest state of Step 1). Adding Microsoft Teams, or another tool, means extracting that
   interface and giving it a second implementation, not touching the GitOps writer, lifecycle, or
   access guardrails underneath — none of those know Slack exists.
 - **Capabilities** — what gets deployed. Today there's one: `image-deploy`, for pre-built

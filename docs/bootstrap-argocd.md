@@ -70,12 +70,13 @@ The webhook URL the ConfigMap uses is `<statusSource.webhookUrl><webhookPath>`.
 Set `statusSource.secretRef: {tokenEnv: DG_WEBHOOK_TOKEN}` to require every webhook request to
 carry an `X-Deployground-Token` header equal to that env var's value. The bootstrap ConfigMap
 then adds that header, sourced from the key `deployground-webhook-token` of
-`argocd-notifications-secret`. Set it to the same value as the bot's token:
-
-```bash
-kubectl -n argocd patch secret argocd-notifications-secret --type merge \
-  -p '{"stringData":{"deployground-webhook-token":"<same value as DG_WEBHOOK_TOKEN>"}}'
-```
+`argocd-notifications-secret` — same rule as the ConfigMap above: `argocd-notifications-secret`
+is normally owned by the same GitOps-managed Argo CD install, so set
+`deployground-webhook-token` there (e.g. the `argo-cd` Helm chart's own
+`notifications.secret.items` values, or however that install's own secrets are otherwise
+managed — External Secrets Operator, Sealed Secrets, whatever you already use) to the same value
+as `DG_WEBHOOK_TOKEN`, and commit it. A direct `kubectl patch` against the live Secret would be
+reverted the same way a direct ConfigMap patch would.
 
 Without `secretRef` the endpoint is unauthenticated; restrict it with a NetworkPolicy.
 

@@ -88,9 +88,7 @@ The core doesn't know Slack exists, so a second front end is additive, not a rew
 | Front end | Status |
 |---|---|
 | Slack | ✅ Available today |
-| Microsoft Teams | 🗺️ On the roadmap |
-| Discord | 🗺️ On the roadmap |
-| A web UI | 🗺️ On the roadmap |
+| Microsoft Teams | 🗺️ Stated direction, not yet built |
 
 **Deploy target** — how a render becomes a running workload:
 
