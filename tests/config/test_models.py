@@ -277,3 +277,8 @@ def test_custom_chart_component_is_valid():
 def test_golden_path_component_is_not_custom_chart():
     comp = Component.model_validate({"image": "ghcr.io/x", "defaultVersion": "1"})
     assert comp.is_custom_chart is False
+
+
+def test_golden_path_component_requires_default_version():
+    with pytest.raises(ValidationError, match="defaultVersion"):
+        Component.model_validate({"image": "ghcr.io/x"})

@@ -155,6 +155,8 @@ class Component(_Model):
             raise ValueError("component must set either 'image' (golden-path) or 'chart'")
         if self.chart is not None and self.imageRef is None:
             raise ValueError("imageRef is required when chart is set")
+        if self.chart is None and self.defaultVersion is None:
+            raise ValueError("defaultVersion is required for golden-path components")
         return self
 
 
