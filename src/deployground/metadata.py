@@ -215,7 +215,12 @@ def from_annotations(annotations: Any) -> ComponentRecord:
     if "catalog" not in block and "stack" in block:
         block["catalog"] = block["stack"]
     overrides_raw = annotations.get(f"{ANNOTATION_PREFIX}overrides")
-    block["overrides"] = json.loads(overrides_raw) if overrides_raw is not None else {}
+    try:
+        block["overrides"] = json.loads(overrides_raw) if overrides_raw is not None else {}
+    except ValueError as exc:
+        raise InvalidMetadata(
+            f"overrides annotation is not valid JSON: {overrides_raw!r}"
+        ) from exc
     return _record_from_block(block)
 
 

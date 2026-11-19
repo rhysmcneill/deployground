@@ -8,7 +8,12 @@ from deployground.capability.image_deploy import ImageDeployCapability
 from deployground.catalog import Catalog, ResolvedCustomComponent
 from deployground.config.models import CapabilityCfg, Config, FieldRef, WorkloadChartCfg
 from deployground.deploytarget.applicationset import ApplicationSetTarget
-from deployground.metadata import ComponentRecord, StackRecord, parse_metadata_block
+from deployground.metadata import (
+    ComponentRecord,
+    StackRecord,
+    parse_component_file,
+    parse_metadata_block,
+)
 from tests.deploytarget.test_applicationset import CFG, REPO, make_config
 
 
@@ -37,6 +42,19 @@ def make_cfg_with_custom_chart() -> Config:
                         {"path": "replicas", "label": "Replicas"},
                     ],
                 },
+                "gitservice": {
+                    "chart": {
+                        "type": "git",
+                        "gitRepo": "https://github.com/org/charts.git",
+                        "gitRef": "main",
+                        "chartPath": "charts/gitservice",
+                    },
+                    "values": {"image": {"repository": "ghcr.io/org/gitservice", "tag": "v1"}},
+                    "imageRef": {"path": "image.repository"},
+                    "overridable": [
+                        {"path": "image.tag", "label": "Version"},
+                    ],
+                },
             }
         }
     }
@@ -47,6 +65,7 @@ def make_cfg_with_custom_chart() -> Config:
         }
     }
     return Config.model_validate(base)
+
 
 EXPIRES = datetime(2026, 11, 13, 9, 0, tzinfo=UTC)
 
@@ -270,6 +289,27 @@ def test_render_succeeds_and_sets_chart_version_for_custom_chart_component():
     by_path = {c.path: yaml.safe_load(c.content) for c in changes}
     record = parse_metadata_block(by_path["dev/demo/myservice/config.yaml"])
     assert record.version == "1.4.0"
+
+
+def test_render_writes_a_reparseable_record_for_git_type_custom_chart_component():
+    """A `type: "git"` custom chart has no `.version` (that chart's pin is expressed via
+    `.gitRef` instead) -- ``ComponentRecord.version`` must never be written as the literal
+    `None`/`null` that `.chart.version` is for a git chart, or `parse_component_file` raises
+    `InvalidMetadata` on the very next `StackIndex.rebuild()` and the stack silently drops out
+    of the in-memory index."""
+    cfg = make_cfg_with_custom_chart()
+    ctx = RenderContext(
+        catalog=Catalog(lambda: cfg),
+        deploy_target=ApplicationSetTarget(CFG, REPO),
+        capability_cfg=cfg.capabilities["image-deploy"],
+        environments=cfg.environments,
+    )
+    changes = ImageDeployCapability().render(make_inputs(catalog="demo"), ctx)
+    by_path = {c.path: yaml.safe_load(c.content) for c in changes}
+    # Full write-then-reparse round trip through the real entry point, exactly as
+    # StackIndex.rebuild() exercises it.
+    record = parse_component_file(by_path["dev/demo/gitservice/config.yaml"])
+    assert record.version == "main"
 
 
 def test_needs_approval_follows_env():

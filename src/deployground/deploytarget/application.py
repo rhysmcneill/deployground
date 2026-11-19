@@ -61,7 +61,7 @@ class ApplicationTarget:
         ]
         if records:
             base = next(iter(records.values()))
-            system_record = replace(base, component=RESERVED_COMPONENT, version="")
+            system_record = replace(base, component=RESERVED_COMPONENT, version="", overrides={})
             changes.append(
                 FileChange(
                     repo=self._repo_ref,

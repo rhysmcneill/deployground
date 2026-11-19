@@ -132,12 +132,14 @@ def test_expires_at_rejects_naive_datetime():
 
 
 def test_block_roundtrips_non_empty_overrides():
-    record = ComponentRecord(**{**_record().__dict__, "overrides": {"image.tag": "v9", "replicas": "5"}})
+    overrides = {"image.tag": "v9", "replicas": "5"}
+    record = ComponentRecord(**{**_record().__dict__, "overrides": overrides})
     assert parse_metadata_block({"deployground": to_metadata_block(record)}) == record
 
 
 def test_annotations_roundtrip_non_empty_overrides():
-    record = ComponentRecord(**{**_record().__dict__, "overrides": {"image.tag": "v9", "replicas": "5"}})
+    overrides = {"image.tag": "v9", "replicas": "5"}
+    record = ComponentRecord(**{**_record().__dict__, "overrides": overrides})
     assert from_annotations(to_annotations(record)) == record
 
 
@@ -147,6 +149,16 @@ def test_from_annotations_defaults_overrides_to_empty_when_annotation_absent():
     del annotations["deployground.io/overrides"]
     parsed = from_annotations(annotations)
     assert parsed.overrides == {}
+
+
+def test_from_annotations_rejects_malformed_overrides_json():
+    """A corrupt overrides annotation must raise `InvalidMetadata`, not a bare
+    `json.JSONDecodeError` -- `StackIndex.rebuild()` only catches `InvalidMetadata`/
+    `yaml.YAMLError` per file so one bad file doesn't crash the whole rebuild."""
+    annotations = to_annotations(_record())
+    annotations["deployground.io/overrides"] = "{not valid json"
+    with pytest.raises(InvalidMetadata):
+        from_annotations(annotations)
 
 
 def test_annotations_roundtrip_component_record():

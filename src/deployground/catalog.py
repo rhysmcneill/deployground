@@ -80,6 +80,31 @@ class ResolvedCustomComponent(_Model):
     ingressRef: FieldRef | None = None
 
 
+def chart_pin(chart: WorkloadChartCfg) -> str:
+    """The resolved custom chart's own pinned revision: `.version` for an oci chart,
+    `.gitRef` for a git chart -- a git chart's own `.version` is always `None` by the
+    model's design (its pin is expressed via `.gitRef` instead), so reading `.version`
+    unconditionally here would silently produce `None`/`null` for every git chart."""
+    return chart.version if chart.type == "oci" else (chart.gitRef or "")
+
+
+def seed_chart_version_override(
+    comp: "ResolvedComponent | ResolvedCustomComponent", submitted: dict[str, str]
+) -> dict[str, str]:
+    """The `overrides` dict to persist on a `ComponentRecord` for ``comp``.
+
+    For a custom-chart component, ensures `"chart.version"` is always present -- seeded
+    from the chart's own resolved pin when the operator didn't submit it (whether or not
+    they ever declared it `overridable`) -- so a later catalog bump to that chart's pinned
+    version can't silently flow through on the next `extend()` call, the same guarantee a
+    golden-path component gets for free via its always-submitted `version` override.
+    """
+    overrides = dict(submitted)
+    if not isinstance(comp, ResolvedComponent) and "chart.version" not in overrides:
+        overrides["chart.version"] = chart_pin(comp.chart)
+    return overrides
+
+
 class Catalog:
     def __init__(self, config_provider: Callable[[], Config]) -> None:
         self._config_provider = config_provider

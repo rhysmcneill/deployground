@@ -107,7 +107,9 @@ class ApplicationSetTarget:
             )
         if records:
             base = next(iter(records.values()))
-            block = to_metadata_block(replace(base, component=RESERVED_COMPONENT, version=""))
+            block = to_metadata_block(
+                replace(base, component=RESERVED_COMPONENT, version="", overrides={})
+            )
             block["chart"] = chart_fields(self._cfg.workloadChart)
             changes.append(
                 FileChange(

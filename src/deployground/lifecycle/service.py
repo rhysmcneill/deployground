@@ -15,7 +15,12 @@ from datetime import UTC, datetime, timedelta
 
 from deployground.authz.base import AuthzProvider
 from deployground.capability.base import Capability, RenderContext, RenderInputs
-from deployground.catalog import ResolvedComponent, UnknownStack
+from deployground.catalog import (
+    ResolvedComponent,
+    UnknownStack,
+    chart_pin,
+    seed_chart_version_override,
+)
 from deployground.config.models import Environment, Lifecycle, RepoRef, parse_duration
 from deployground.git.base import GitClient, PrResult
 from deployground.index import StackIndex
@@ -181,11 +186,13 @@ class LifecycleService:
                     env=env,
                     expires_at=expires_at,
                     version=(
-                        comp.version if isinstance(comp, ResolvedComponent) else comp.chart.version
+                        comp.version
+                        if isinstance(comp, ResolvedComponent)
+                        else chart_pin(comp.chart)
                     ),
                     thread_ts=thread_ts,
                     channel=channel,
-                    overrides=dict(overrides.get(name, {})),
+                    overrides=seed_chart_version_override(comp, overrides.get(name, {})),
                 )
                 for name, comp in resolved.items()
             },

@@ -2,7 +2,12 @@
 
 from deployground import dotpath
 from deployground.capability.base import GuardrailViolation, RenderContext, RenderInputs
-from deployground.catalog import ResolvedComponent, ResolvedCustomComponent
+from deployground.catalog import (
+    ResolvedComponent,
+    ResolvedCustomComponent,
+    chart_pin,
+    seed_chart_version_override,
+)
 from deployground.config.models import Environment, TtlPolicy
 from deployground.git.base import FileChange
 from deployground.metadata import ComponentRecord, StackRecord
@@ -36,11 +41,11 @@ class ImageDeployCapability:
                 env=inputs.env,
                 expires_at=inputs.expires_at,
                 version=(
-                    comp.version if isinstance(comp, ResolvedComponent) else comp.chart.version
+                    comp.version if isinstance(comp, ResolvedComponent) else chart_pin(comp.chart)
                 ),
                 thread_ts=inputs.thread_ts,
                 channel=inputs.channel,
-                overrides=dict(inputs.overrides.get(name, {})),
+                overrides=seed_chart_version_override(comp, inputs.overrides.get(name, {})),
             )
             for name, comp in components.items()
         }
