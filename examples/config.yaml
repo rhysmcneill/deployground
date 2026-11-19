@@ -78,6 +78,26 @@ catalog:
         # runtime. This does NOT help pull private images — that's imagePullSecrets above:
         # serviceAccountName: my-irsa-sa
       worker: { image: ghcr.io/my-org/worker, defaultVersion: v2.0.0 }
+  custom-chart-example:
+    components:
+      # A component can point at its own Helm chart instead of the built-in golden-path
+      # chart -- e.g. when the service already ships a chart of its own. `imageRef` tells
+      # deployground where the image repo lives inside `values`, so allowedRegistries keeps
+      # enforcing the same guardrail it does for golden-path's typed `image` field above.
+      myservice:
+        chart:
+          type: oci # or: git, same shape as deployTarget.workloadChart
+          repo: ghcr.io/my-org
+          chart: myservice-chart
+          version: "1.4.0"
+        values:
+          image: { repository: ghcr.io/my-org/myservice, tag: v1.0.0 }
+          replicas: 2
+        imageRef: { path: image.repository }
+        overridable:
+          - { path: image.tag, label: "Version" }
+          - { path: chart.version, label: "Chart version" }
+          - { path: replicas, label: "Replicas" }
 
 capabilities:
   image-deploy:
