@@ -11,14 +11,21 @@ team. Pick a stack, pick versions, hit submit. A PR opens, GitOps takes it from 
 watch it go live in the same thread. Every deploy is owned, time-boxed, and torn down
 automatically when it expires.
 
-**Slack is the first integration, not the only one planned.** The GitOps writer, lifecycle, and
-access guardrails don't know or care which chat tool triggered them — Slack is just what Step 1
-built the front end in. Teaching Deployground a second chat platform (Microsoft Teams, say) is
-on the roadmap as that front end's natural next step, not a rewrite of the core underneath it.
-
 It's a thin front end over **Git and ArgoCD** — the bot never touches your cluster directly, and
 nothing it needs is installed out-of-band beyond one bootstrapped ApplicationSet. No database:
 Git is the source of truth, and the bot rebuilds its state from Git on every restart.
+
+## Contents
+
+- [Why](#why)
+- [How it works](#how-it-works)
+- [Try it](#try-it)
+- [Compatible with](#compatible-with)
+- [Getting started](#getting-started)
+- [Documentation](#documentation)
+- [Architecture](#architecture)
+- [Contributing](#contributing)
+- [License](#license)
 
 ## Why
 
@@ -73,6 +80,34 @@ Access is **default-deny** and scoped by Slack user, usergroup, or channel, per 
 …and the thread fills in as the three components go `Deploying → Running`, then posts
 `✅ Deployment complete — @you`.
 
+## Compatible with
+
+**Chat/UI front end** — Slack today, direct and complete (forms, threads, buttons, App Home).
+The core doesn't know Slack exists, so a second front end is additive, not a rewrite:
+
+| Front end | Status |
+|---|---|
+| Slack | ✅ Available today |
+| Microsoft Teams | 🗺️ Stated direction, not yet built |
+
+**Deploy target** — how a render becomes a running workload:
+
+| Target | Status |
+|---|---|
+| Argo CD `ApplicationSet` (bootstrapped for you) | ✅ Available today |
+| Argo CD `Application` CR (for operators who restrict ApplicationSets) | ✅ Available today |
+| Flux | ❌ Not planned |
+
+**Status source** — how deploy progress gets back to the chat thread:
+
+| Source | Status |
+|---|---|
+| Argo CD Notifications (push) | ✅ Available today |
+| Argo CD API (poll) | ✅ Available today |
+
+See [Architecture](#architecture) for why adding a new one of any of these doesn't touch the
+core underneath it.
+
 ## Getting started
 
 ```
@@ -87,41 +122,31 @@ at [`examples/config.yaml`](examples/config.yaml) to start from.
 
 Deploying your own services needs no chart of your own: the default workload chart
 (`golden-path-chart`) is published and versioned alongside the bot, so adding a stack is just a
-few lines of config — an image, a port, a default version.
+few lines of config — an image, a port, a default version. A service that needs more can bring
+its own chart instead — see [Configuration](docs/configuration.md#custom-charts-per-component).
 
-## Built to grow
+## Documentation
+
+| | |
+|---|---|
+| [Quickstart](docs/quickstart.md) | Start here — the install walkthrough, in order |
+| [Slack setup](docs/slack/SLACK-SETUP.md) | Create the Slack app, get your tokens |
+| [Configuration](docs/configuration.md) | Writing `config.yaml`: catalog, custom charts, guardrails, access |
+| [Example config](examples/README.md) | Every supported combination, annotated in one working file |
+| [Installing the bot](docs/install.md) | The Secret, the Helm install |
+| [Bootstrapping Argo CD](docs/bootstrap-argocd.md) | The ApplicationSet, notifications, status connectivity |
+| [Deploying from Slack](docs/deploying.md) | Using the deploy form day to day |
+| [Architecture](docs/architecture.md) | How the pieces fit together, and the seams for extending it |
+| [Contributing](CONTRIBUTING.md) | Dev setup, running the tests, the PR flow |
+
+## Architecture
 
 Deployground's core — the GitOps writer, lifecycle (TTL/warn/reap), and access guardrails —
 doesn't change as new things get added on top of it; none of it has ever imported anything
-Slack-specific. Everything that varies sits behind a seam. Three are real protocols today —
-deploy targets and status sources each already have two implementations, capabilities its
-first (`image-deploy`) — and one, the chat layer, is still a stated direction rather than code:
-
-- **The chat layer** — Slack today, directly (there's no platform abstraction yet; that's the
-  honest state of Step 1). Adding Microsoft Teams or another tool means extracting that
-  interface and giving it a second implementation, not touching the GitOps writer, lifecycle,
-  or access guardrails underneath — none of those know Slack exists.
-- **Capabilities** — what gets deployed. Today there's one: `image-deploy`, for pre-built
-  container images. The design leaves room for a `repo` capability (build from source, with
-  per-PR preview environments) and an `infra` capability (Terraform/Terramate stacks via CI,
-  plan → approve → apply) — each reusing the same form engine, lifecycle, and chat-layer UX a
-  new capability gets for free.
-- **Deploy targets** — how a render becomes a running workload: a bootstrapped ArgoCD
-  `ApplicationSet` by default, or a native `Application` CR for operators who restrict
-  ApplicationSets. Flux and raw-manifest targets fit the same seam.
-- **Status sources** — how progress gets back to the chat thread: ArgoCD Notifications (push) or
-  the ArgoCD API (poll) today; any event-driven source (a CI pipeline, EventBridge) fits the
-  same shape.
-
-## Project layout
-
-```
-src/deployground/   the bot — config, catalog, Slack, lifecycle, deploy targets, status sources
-helm/charts/         Helm charts: the bot itself, and the default workload chart (golden-path)
-docs/                quickstart, the design spec, and the implementation plan
-examples/            a complete example config.yaml
-deploy/               the Slack app manifest
-```
+Slack-specific. Everything that varies (the chat front end, what gets deployed, how it's
+rendered, how progress gets reported) sits behind a seam, so adding a new one of any of them is
+additive. Full detail, including the project layout and what's deferred, is in
+**[docs/architecture.md](docs/architecture.md)**.
 
 ## Contributing
 
