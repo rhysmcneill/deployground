@@ -64,11 +64,7 @@ catalog:
         image: ghcr.io/my-org/web
         defaultVersion: v4.5.6
         port: 3000
-        # Neither set: private, no Ingress. ingressClassName alone (e.g. "tailscale")
-        # defaults the host to the bare stack name -- no ingressHost needed.
-        # ingressClassName: tailscale
-        # ingressHost spells out a real host; {stack} keeps multi-deploy stacks collision-free.
-        ingressHost: "{stack}.apps.home.example.com"
+        ingressHost: "{stack}.apps.home.example.com" # {stack} keeps multi-deploy stacks unique
         # Optional: names of pre-existing dockerconfigjson Secrets (e.g. `kubectl create
         # secret docker-registry ...`) so kubelet can pull this image from a private
         # registry (Harbor, private ECR, private ghcr, etc.):
@@ -77,13 +73,16 @@ catalog:
         # for IRSA) the pod runs under, so the workload's own code can call AWS APIs at
         # runtime. This does NOT help pull private images — that's imagePullSecrets above:
         # serviceAccountName: my-irsa-sa
+      admin:
+        image: ghcr.io/my-org/admin
+        defaultVersion: v1.0.0
+        port: 9000
+        ingressClassName: tailscale # no ingressHost -> host defaults to the bare stack name
       worker:
         image: ghcr.io/my-org/worker
         defaultVersion: v2.0.0
-        # A background worker: no port/ingress, but it still reads config and needs a
-        # private-registry pull secret and plain env vars.
         env: { QUEUE_NAME: jobs, LOG_LEVEL: info }
-        secretRefs: [worker-env] # names of pre-existing Secrets injected with envFrom
+        secretRefs: [worker-env] # pre-existing Secrets injected with envFrom; no port/ingress
   custom-chart-example:
     components:
       # A component can point at its own Helm chart instead of the built-in golden-path
@@ -104,22 +103,17 @@ catalog:
           - { path: image.tag, label: "Version" }
           - { path: chart.version, label: "Chart version" }
           - { path: replicas, label: "Replicas" }
-      # The git-chart shape, plus `ingressRef` -- the custom-chart equivalent of
-      # golden-path's typed `ingressHost`, so ingressDomains can still enforce on a chart
-      # that renders its own Ingress from somewhere inside `values`. For a git-type chart,
-      # `chart.version` resolves to the chart's `gitRef` (its own `version` field is unused).
+      # git-type chart, plus ingressRef (the custom-chart equivalent of ingressHost).
+      # chart.version resolves to gitRef here, not version.
       myservice-git:
         chart:
           type: git
           gitRepo: https://github.com/my-org/myservice-chart.git
-          gitRef: main # the "chart version" a git-type chart exposes as overridable
+          gitRef: main
           chartPath: charts/myservice
         values:
           image: { repository: ghcr.io/my-org/myservice, tag: v1.0.0 }
-          # No {stack} substitution here -- that's a golden-path-only convenience on the
-          # typed ingressHost field. A custom chart's values are used exactly as written
-          # (plus any operator-submitted override), so a per-stack host needs its own
-          # overridable entry if you want deployers to set it per deploy.
+          # unlike ingressHost, custom-chart values get no {stack} substitution
           ingress: { host: myservice-git.apps.home.example.com }
         imageRef: { path: image.repository }
         ingressRef: { path: ingress.host }

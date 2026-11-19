@@ -9,15 +9,16 @@ What each piece of it demonstrates:
 | Section | Shows |
 |---|---|
 | `git.repos` | Two repos (nonprod/prod), each with its own token env var |
-| `deployTarget` | `type: applicationset` (the default); the comment shows the one-line swap to `type: application`, and the commented `workloadChart` block shows overriding the default chart |
-| `environments.homelab` | Direct-cluster destination (`https://kubernetes.default.svc`), auto-merge on, no approval |
-| `environments.prod` | A named registered cluster, auto-merge off, `requiresApproval: true`, no TTL (`ttl: { default: none }`) |
-| `catalog.api` | The minimal golden-path component: `image`/`defaultVersion`/`port` |
-| `catalog.my-etire-stack.api` | A second golden-path component alongside the first, in one catalog entry |
-| `catalog.my-etire-stack.web` | Golden-path's `ingressHost` with the `{stack}` placeholder; the commented alternatives show `ingressClassName`-only (host defaults to the bare stack name) and the private-registry/IRSA fields (`imagePullSecrets`, `serviceAccountName`) |
-| `catalog.my-etire-stack.worker` | Golden-path's `env`/`secretRefs` — plain env vars plus envFrom from a pre-existing Secret |
-| `catalog.custom-chart-example.myservice` | A custom OCI chart, `imageRef`, and `overridable` including `chart.version` |
-| `catalog.custom-chart-example.myservice-git` | The same, but `type: git` (so `chart.version` resolves to `gitRef` instead), plus `ingressRef` — and a note on why `{stack}` does **not** get substituted into custom-chart `values` the way it does for golden-path's `ingressHost` |
+| `deployTarget` | `applicationset` (default); comments show `application` and a custom `workloadChart` |
+| `environments.homelab` | Direct-cluster destination, auto-merge on, no approval |
+| `environments.prod` | Named registered cluster, auto-merge off, approval required, no TTL |
+| `catalog.api` | Minimal golden-path component: `image`/`defaultVersion`/`port` |
+| `catalog.my-etire-stack.api` | A second golden-path component in the same catalog entry |
+| `catalog.my-etire-stack.web` | `ingressHost` with `{stack}`; commented `imagePullSecrets`/`serviceAccountName` |
+| `catalog.my-etire-stack.admin` | `ingressClassName` alone — host defaults to the bare stack name |
+| `catalog.my-etire-stack.worker` | No ingress at all; `env`/`secretRefs` |
+| `catalog.custom-chart-example.myservice` | OCI custom chart, `imageRef`, `overridable` incl. `chart.version` |
+| `catalog.custom-chart-example.myservice-git` | Git-type chart (`chart.version` → `gitRef`), `ingressRef` |
 | `capabilities.image-deploy` | `allowedRegistries`/`ingressDomains` guardrails |
 | `access.rules` | Admin usergroup, a channel scoped to one environment, a user scoped to all, a usergroup scoped to prod |
 | `statusSource` | The default push (`argocd-notifications`) with webhook auth; the commented alternative shows the pull-based `argocd-api` shape |
