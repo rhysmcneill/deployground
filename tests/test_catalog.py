@@ -1,6 +1,12 @@
 import pytest
 
-from deployground.catalog import Catalog, UnknownComponent, UnknownStack, resolve_ingress_host
+from deployground.catalog import (
+    Catalog,
+    DisallowedOverride,
+    UnknownComponent,
+    UnknownStack,
+    resolve_ingress_host,
+)
 from deployground.config.models import Config
 
 BASE = {
@@ -52,6 +58,10 @@ BASE = {
                     "chart": {"type": "oci", "repo": "ghcr.io/my-org", "chart": "myservice"},
                     "values": {"image": {"repository": "my-org/myservice", "tag": "v1"}},
                     "imageRef": {"path": "image.tag"},
+                    "overridable": [
+                        {"path": "image.tag", "label": "Image tag"},
+                        {"path": "replicas", "label": "Replicas"},
+                    ],
                 },
             }
         },
@@ -150,6 +160,37 @@ def test_resolve_versions_custom_chart_overrides_chart_version():
 def test_resolve_versions_unknown_component_override_raises_demo():
     with pytest.raises(UnknownComponent):
         make_catalog().resolve_versions("demo", {"nope": {"version": "x"}})
+
+
+def test_resolve_versions_custom_chart_rejects_undeclared_override_path():
+    with pytest.raises(DisallowedOverride):
+        make_catalog().resolve_versions("demo", {"myservice": {"image.repository": "evil/img"}})
+
+
+def test_resolve_versions_custom_chart_rejects_undeclared_path_atomically():
+    """A disallowed path in the same submission must not partially apply the allowed ones."""
+    catalog = make_catalog()
+    with pytest.raises(DisallowedOverride):
+        catalog.resolve_versions(
+            "demo", {"myservice": {"image.tag": "v9", "image.repository": "evil/img"}}
+        )
+    # Unaffected by the failed call: a fresh resolve still sees the untouched default.
+    resolved = catalog.resolve_versions("demo", {})
+    assert resolved["myservice"].values["image"]["tag"] == "v1"
+
+
+def test_resolve_versions_custom_chart_allows_declared_overridable_paths():
+    resolved = make_catalog().resolve_versions(
+        "demo", {"myservice": {"image.tag": "v9", "replicas": "5"}}
+    )
+    comp = resolved["myservice"]
+    assert comp.values["image"]["tag"] == "v9"
+    assert comp.values["replicas"] == "5"
+
+
+def test_resolve_versions_custom_chart_always_allows_chart_version():
+    resolved = make_catalog().resolve_versions("demo", {"myservice": {"chart.version": "9.9.9"}})
+    assert resolved["myservice"].chart.version == "9.9.9"
 
 
 def test_unknown_stack_raises():

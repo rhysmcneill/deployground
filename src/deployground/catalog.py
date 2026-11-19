@@ -49,6 +49,22 @@ class UnknownComponent(KeyError):
         return self.args[0]
 
 
+class DisallowedOverride(ValueError):
+    """Raised when an override path isn't in the component's declared `overridable` set."""
+
+    def __init__(self, stack: str, component: str, path: str) -> None:
+        self.stack = stack
+        self.component = component
+        self.path = path
+        super().__init__(
+            f"override path {path!r} is not allowed for component {component!r} "
+            f"in stack {stack!r}"
+        )
+
+    def __str__(self) -> str:
+        return self.args[0]
+
+
 class ResolvedComponent(Component):
     """A component with the concrete version chosen for this deploy."""
 
@@ -89,7 +105,12 @@ class Catalog:
             if comp.is_custom_chart:
                 values = comp.values
                 chart = comp.chart
-                for path, value in overrides.get(name, {}).items():
+                comp_overrides = overrides.get(name, {})
+                allowed_paths = {f.path for f in comp.overridable} | {"chart.version"}
+                for path in comp_overrides:
+                    if path not in allowed_paths:
+                        raise DisallowedOverride(stack, name, path)
+                for path, value in comp_overrides.items():
                     if path == "chart.version":
                         chart = chart.model_copy(update={"version": value})
                     else:
