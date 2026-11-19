@@ -2,23 +2,17 @@
 
 ## Generate the manifests
 
-`deployground bootstrap` **only prints** manifests, each preceded by `# --- <name> ---`, so you
-can review them. Nothing is applied for you by this command:
+`deployground bootstrap` **only prints** manifests, each preceded by `# --- <name> ---` — text to
+read, not something to apply directly:
 
 ```bash
 deployground bootstrap --config my-config.yaml > bootstrap.yaml
-# review, then apply to the Argo CD cluster/namespace
-kubectl apply -f bootstrap.yaml
 ```
 
-Running this `kubectl apply` by hand is only needed for the notifications ConfigMap (there's no
-automated path for it — see below) and, optionally, for a one-time by-hand review of the
-`ApplicationSet` *before* you turn on `bootstrap.enabled`. If you set `bootstrap.enabled: true`
-from your very first install, you never need to run this for the `ApplicationSet` at all — the
-chart's own PreSync hook applies it on every sync, starting with the first one. See
-[`bootstrap.enabled`](#applying-each-piece) below.
-
-For the default `applicationset` target you get:
+For the default `applicationset` target it prints two pieces, and each one is applied a
+different way — **neither by a manual `kubectl apply`/`kubectl patch`** against a running
+cluster, since anything Argo CD's own install already manages would just get reverted on its
+next reconcile:
 
 - One **`ApplicationSet`** per environment. Each targets that environment's cluster and watches
   only its own subtree of the component path.
@@ -27,19 +21,22 @@ For the default `applicationset` target you get:
 
 ## Applying each piece
 
-**The notifications ConfigMap is never something to `kubectl apply` directly, and never
-something the chart automates.** `argocd-notifications-cm` is normally already owned by however
-you installed Argo CD itself (e.g. the `argo-cd` Helm chart's own `notifications:` values).
-Applying it separately would work until the next time you upgrade that install, which would
-silently wipe your changes back out. **Merge its `data` keys into that install's own config
-instead** — once; re-merge only if you change `statusSource`/triggers later.
+**The notifications ConfigMap always goes through GitOps, never `kubectl`.**
+`argocd-notifications-cm` is normally already owned by however you installed Argo CD itself
+(e.g. the `argo-cd` Helm chart's own `notifications:` values, synced from your own GitOps repo
+for that install). **Merge the printed `data` keys into that install's own values file and
+commit it** — the next sync applies it. Patching the live ConfigMap directly would work until
+that install's own next reconcile, which would silently revert it back out; re-merge only if you
+change `statusSource`/triggers later.
 
-The **`ApplicationSet`** has no such owner — it's uniquely deployground's own resource — so it's
-safe to apply directly, and the chart can do it for you: set `bootstrap.enabled: true` to run
+The **`ApplicationSet`** has no such owner — it's uniquely deployground's own resource, nothing
+else manages it — so the chart applies it for you: set `bootstrap.enabled: true` to run
 `deployground bootstrap --only applicationset` as a PreSync hook on every sync, via a dedicated,
 narrowly-scoped ServiceAccount (create/update on ApplicationSets only — the bot's own pod is
-never granted this). It's off by default: review the ApplicationSet by hand once before turning
-it on, since enabling it means no human reviews it before each apply thereafter.
+never granted this). With it enabled from your very first install, the `ApplicationSet` is never
+applied by hand at all — the hook creates it on the first sync, same as every sync after. It's
+off by default only so you can read the printed manifest once before trusting the hook with it;
+turning it on means no human reviews it before each apply thereafter.
 
 ## The workload chart
 
