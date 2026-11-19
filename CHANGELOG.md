@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.10.0](https://github.com/rhysmcneill/deployground/compare/deployground-v0.9.0...deployground-v0.10.0) (2026-11-19)
+
+
+### ⚠ BREAKING CHANGES
+
+* **config:** clean up each stack's namespace on destroy ([#49](https://github.com/rhysmcneill/deployground/issues/49))
+
+### Features
+
+* **config:** clean up each stack's namespace on destroy ([#49](https://github.com/rhysmcneill/deployground/issues/49)) ([cfa2529](https://github.com/rhysmcneill/deployground/commit/cfa2529cf23696f620a86d23d117a5907d23236a))
+* custom Helm chart per catalog component ([#51](https://github.com/rhysmcneill/deployground/issues/51)) ([9df6d3d](https://github.com/rhysmcneill/deployground/commit/9df6d3d5d69e588c2bfdbe50748db0d2e78bc634))
+
 ## [0.9.0](https://github.com/rhysmcneill/deployground/compare/deployground-v0.8.2...deployground-v0.9.0) (2026-11-17)
 
 
