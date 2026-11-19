@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.5.0](https://github.com/rhysmcneill/deployground/compare/golden-path-chart-v0.4.2...golden-path-chart-v0.5.0) (2026-11-19)
+
+
+### ⚠ BREAKING CHANGES
+
+* **config:** clean up each stack's namespace on destroy ([#49](https://github.com/rhysmcneill/deployground/issues/49))
+
+### Features
+
+* **config:** clean up each stack's namespace on destroy ([#49](https://github.com/rhysmcneill/deployground/issues/49)) ([cfa2529](https://github.com/rhysmcneill/deployground/commit/cfa2529cf23696f620a86d23d117a5907d23236a))
+
 ## [0.4.2](https://github.com/rhysmcneill/deployground/compare/golden-path-chart-v0.4.1...golden-path-chart-v0.4.2) (2026-11-17)
 
 
