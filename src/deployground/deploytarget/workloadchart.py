@@ -34,3 +34,24 @@ def chart_source(cfg: WorkloadChartCfg) -> dict[str, Any]:
         "chart": chart,
         "targetRevision": version,
     }
+
+
+def chart_fields(cfg: WorkloadChartCfg) -> dict[str, str]:
+    """Flattens a WorkloadChartCfg into all four possible chart-source keys, always present
+    (empty string for whichever pair `cfg.type` doesn't use) -- for callers that must
+    substitute one static template across many per-file chart refs, where every key must
+    exist in every file or ArgoCD's generator leaves the literal, un-substituted placeholder
+    in place instead of an empty string."""
+    if cfg.type == "git":
+        return {
+            "repoURL": cfg.gitRepo or "",
+            "targetRevision": cfg.gitRef or "",
+            "path": cfg.chartPath or "",
+            "chart": "",
+        }
+    return {
+        "repoURL": cfg.repo or "ghcr.io/rhysmcneill",
+        "chart": cfg.chart or "golden-path-chart",
+        "targetRevision": cfg.version or __version__,
+        "path": "",
+    }
