@@ -3,13 +3,17 @@
 ## Generate the manifests
 
 `deployground bootstrap` **only prints** manifests, each preceded by `# --- <name> ---`, so you
-can review them. Nothing is applied for you:
+can review them. Nothing is applied for you by this command:
 
 ```bash
 deployground bootstrap --config my-config.yaml > bootstrap.yaml
 # review, then apply to the Argo CD cluster/namespace
 kubectl apply -f bootstrap.yaml
 ```
+
+This manual `kubectl apply` is the one-time initial setup, and the only path for the
+notifications ConfigMap. The `ApplicationSet` piece can instead be kept in sync automatically
+after that first review — see [`bootstrap.enabled`](#applying-each-piece) below.
 
 For the default `applicationset` target you get:
 
