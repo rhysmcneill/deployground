@@ -3,8 +3,15 @@ from datetime import UTC, datetime
 import yaml
 
 import deployground
-from deployground.catalog import ResolvedComponent
-from deployground.config.models import Config, DeployTargetCfg, RepoRef, TokenRef
+from deployground.catalog import ResolvedComponent, ResolvedCustomComponent
+from deployground.config.models import (
+    Config,
+    DeployTargetCfg,
+    FieldRef,
+    RepoRef,
+    TokenRef,
+    WorkloadChartCfg,
+)
 from deployground.deploytarget.applicationset import ApplicationSetTarget
 from deployground.metadata import ComponentRecord, to_annotations, to_metadata_block
 
@@ -47,6 +54,17 @@ def record(name: str) -> ComponentRecord:
         version="1.2.3",
         thread_ts="1.1",
         channel="C1",
+    )
+
+
+def custom_resolved(name: str) -> ResolvedCustomComponent:
+    return ResolvedCustomComponent(
+        chart=WorkloadChartCfg(
+            type="oci", repo="ghcr.io/acme", chart=f"{name}-chart", version="2.0.0"
+        ),
+        values={"replicas": 2, "image": {"repository": f"ghcr.io/acme/{name}", "tag": "v2"}},
+        imageRef=FieldRef(path="image.tag"),
+        ingressRef=None,
     )
 
 
@@ -280,6 +298,31 @@ def test_bootstrap_one_applicationset_per_env_with_its_cluster():
     assert dev["spec"]["template"]["spec"]["destination"]["name"] == "dev-cluster"
     assert prod["spec"]["template"]["spec"]["destination"]["name"] == "prod-eks"
     assert prod["spec"]["generators"][0]["git"]["files"] == [{"path": "prod/*/*/config.yaml"}]
+
+
+def test_files_for_custom_chart_component_writes_values_and_uses_its_own_chart():
+    comp = custom_resolved("myservice")
+    changes = ApplicationSetTarget(CFG, REPO).files_for(
+        "demo", "dev", {"myservice": comp}, {"myservice": record("myservice")}
+    )
+    content = yaml.safe_load(next(c.content for c in changes if "myservice" in c.path))
+    assert content["replicas"] == 2  # from comp.values, not a golden-path field
+    assert content["image"] == {"repository": "ghcr.io/acme/myservice", "tag": "v2"}
+    assert content["deployground"]["component"] == "myservice"
+
+
+def test_files_for_golden_path_and_custom_chart_components_coexist():
+    components = {"api": resolved("api"), "myservice": custom_resolved("myservice")}
+    records = {"api": record("api"), "myservice": record("myservice")}
+    changes = ApplicationSetTarget(CFG, REPO).files_for("demo", "dev", components, records)
+    by_path = {c.path: yaml.safe_load(c.content) for c in changes}
+    api = by_path["dev/demo/api/config.yaml"]
+    assert api["image"] == "ghcr.io/org/api:1.2.3"
+    assert api["port"] == 8080
+    myservice = by_path["dev/demo/myservice/config.yaml"]
+    assert myservice["replicas"] == 2
+    assert myservice["image"] == {"repository": "ghcr.io/acme/myservice", "tag": "v2"}
+    assert myservice["deployground"]["component"] == "myservice"
 
 
 def test_bootstrap_applicationset_targets_cluster_by_server_when_cluster_is_a_url():
