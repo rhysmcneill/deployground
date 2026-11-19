@@ -54,6 +54,9 @@ kubectl -n deployground create secret generic deployground-secrets \
   # ...plus the other keys install.md lists
 ```
 
+(In a GitOps-managed cluster, provision this the same way you handle every other secret instead
+— see [Installing the bot](../install.md#create-the-secret) for the recommendation.)
+
 ---
 
 ## Verify

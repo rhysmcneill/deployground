@@ -14,6 +14,13 @@ kubectl -n deployground create secret generic deployground-secrets \
   --from-literal=DG_WEBHOOK_TOKEN=$(openssl rand -hex 24)
 ```
 
+This is a one-time manual create for a brand-new Secret nothing else manages yet — fine for a
+quick start. In a GitOps-managed cluster, it's recommended to provision it the same way you
+handle every other secret instead: an `ExternalSecret` (External Secrets Operator) pulling from
+your actual secret manager (Vault, Infisical, AWS/GCP Secrets Manager, etc.), or Sealed Secrets.
+`existingSecret` just needs to name whatever Secret ends up with these keys — deployground
+doesn't care how it got created.
+
 The chart reads the Secret named by `existingSecret` (default `deployground-secrets`) via
 `envFrom`, so key names are the env var names your config's `authRef`/`tokenRef` entries point at.
 
