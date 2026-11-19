@@ -132,6 +132,7 @@ its own chart instead — see [Configuration](docs/configuration.md#custom-chart
 | [Quickstart](docs/quickstart.md) | Start here — the install walkthrough, in order |
 | [Slack setup](docs/slack/SLACK-SETUP.md) | Create the Slack app, get your tokens |
 | [Configuration](docs/configuration.md) | Writing `config.yaml`: catalog, custom charts, guardrails, access |
+| [Example config](examples/README.md) | Every supported combination, annotated in one working file |
 | [Installing the bot](docs/install.md) | The Secret, the Helm install |
 | [Bootstrapping Argo CD](docs/bootstrap-argocd.md) | The ApplicationSet, notifications, status connectivity |
 | [Deploying from Slack](docs/deploying.md) | Using the deploy form day to day |

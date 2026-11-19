@@ -77,7 +77,13 @@ catalog:
         # for IRSA) the pod runs under, so the workload's own code can call AWS APIs at
         # runtime. This does NOT help pull private images — that's imagePullSecrets above:
         # serviceAccountName: my-irsa-sa
-      worker: { image: ghcr.io/my-org/worker, defaultVersion: v2.0.0 }
+      worker:
+        image: ghcr.io/my-org/worker
+        defaultVersion: v2.0.0
+        # A background worker: no port/ingress, but it still reads config and needs a
+        # private-registry pull secret and plain env vars.
+        env: { QUEUE_NAME: jobs, LOG_LEVEL: info }
+        secretRefs: [worker-env] # names of pre-existing Secrets injected with envFrom
   custom-chart-example:
     components:
       # A component can point at its own Helm chart instead of the built-in golden-path
@@ -86,7 +92,7 @@ catalog:
       # enforcing the same guardrail it does for golden-path's typed `image` field above.
       myservice:
         chart:
-          type: oci # or: git, same shape as deployTarget.workloadChart
+          type: oci # or: git -- see myservice-git below for that shape
           repo: ghcr.io/my-org
           chart: myservice-chart
           version: "1.4.0"
@@ -98,6 +104,28 @@ catalog:
           - { path: image.tag, label: "Version" }
           - { path: chart.version, label: "Chart version" }
           - { path: replicas, label: "Replicas" }
+      # The git-chart shape, plus `ingressRef` -- the custom-chart equivalent of
+      # golden-path's typed `ingressHost`, so ingressDomains can still enforce on a chart
+      # that renders its own Ingress from somewhere inside `values`. For a git-type chart,
+      # `chart.version` resolves to the chart's `gitRef` (its own `version` field is unused).
+      myservice-git:
+        chart:
+          type: git
+          gitRepo: https://github.com/my-org/myservice-chart.git
+          gitRef: main # the "chart version" a git-type chart exposes as overridable
+          chartPath: charts/myservice
+        values:
+          image: { repository: ghcr.io/my-org/myservice, tag: v1.0.0 }
+          # No {stack} substitution here -- that's a golden-path-only convenience on the
+          # typed ingressHost field. A custom chart's values are used exactly as written
+          # (plus any operator-submitted override), so a per-stack host needs its own
+          # overridable entry if you want deployers to set it per deploy.
+          ingress: { host: myservice-git.apps.home.example.com }
+        imageRef: { path: image.repository }
+        ingressRef: { path: ingress.host }
+        overridable:
+          - { path: image.tag, label: "Version" }
+          - { path: chart.version, label: "Chart ref" }
 
 capabilities:
   image-deploy:

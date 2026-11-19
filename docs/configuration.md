@@ -1,7 +1,10 @@
 # Configuration
 
 Copy [`examples/config.yaml`](../examples/config.yaml) and edit it. This page covers what each
-part does; the example file is a complete, working starting point.
+part does; the example file is a complete, working starting point, annotated to show every
+combination supported today (golden-path and custom-chart components, both deploy targets, both
+status sources, ...) — see [`examples/README.md`](../examples/README.md) for a guided tour of
+which part of the file shows which combination.
 
 ## Overview
 
