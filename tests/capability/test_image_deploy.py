@@ -5,8 +5,8 @@ import yaml
 
 from deployground.capability.base import GuardrailViolation, RenderContext, RenderInputs
 from deployground.capability.image_deploy import ImageDeployCapability
-from deployground.catalog import Catalog
-from deployground.config.models import CapabilityCfg, Config
+from deployground.catalog import Catalog, ResolvedCustomComponent
+from deployground.config.models import CapabilityCfg, Config, FieldRef, WorkloadChartCfg
 from deployground.deploytarget.applicationset import ApplicationSetTarget
 from deployground.metadata import ComponentRecord, StackRecord, parse_metadata_block
 from tests.deploytarget.test_applicationset import CFG, REPO, make_config
@@ -161,6 +161,53 @@ def test_destroy_emits_delete_for_all_components():
         "dev/demo/web/config.yaml",
     ]
     assert all(c.content is None for c in changes)
+
+
+def test_check_guardrails_blocks_disallowed_registry_for_custom_chart():
+    ctx = make_ctx()
+    comp = ResolvedCustomComponent(
+        chart=WorkloadChartCfg(),
+        values={"image": {"repository": "evil.example/x"}},
+        imageRef=FieldRef(path="image.repository"),
+    )
+    with pytest.raises(GuardrailViolation, match="evil.example"):
+        ImageDeployCapability._check_guardrails({"myservice": comp}, ctx)
+
+
+def test_check_guardrails_allows_matching_registry_for_custom_chart():
+    ctx = make_ctx()
+    comp = ResolvedCustomComponent(
+        chart=WorkloadChartCfg(),
+        values={"image": {"repository": "ghcr.io/org/custom"}},
+        imageRef=FieldRef(path="image.repository"),
+    )
+    ImageDeployCapability._check_guardrails({"myservice": comp}, ctx)
+
+
+def test_check_guardrails_skips_ingress_check_when_no_ingress_ref():
+    ctx = make_ctx()
+    comp = ResolvedCustomComponent(
+        chart=WorkloadChartCfg(),
+        values={"image": {"repository": "ghcr.io/org/custom"}, "host": "evil.example"},
+        imageRef=FieldRef(path="image.repository"),
+        ingressRef=None,
+    )
+    ImageDeployCapability._check_guardrails({"myservice": comp}, ctx)
+
+
+def test_check_guardrails_blocks_disallowed_ingress_domain_for_custom_chart():
+    ctx = make_ctx()
+    comp = ResolvedCustomComponent(
+        chart=WorkloadChartCfg(),
+        values={
+            "image": {"repository": "ghcr.io/org/custom"},
+            "ingress": {"host": "demo.evil.example"},
+        },
+        imageRef=FieldRef(path="image.repository"),
+        ingressRef=FieldRef(path="ingress.host"),
+    )
+    with pytest.raises(GuardrailViolation, match="demo.evil.example"):
+        ImageDeployCapability._check_guardrails({"myservice": comp}, ctx)
 
 
 def test_needs_approval_follows_env():
