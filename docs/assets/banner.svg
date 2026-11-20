@@ -1,0 +1,61 @@
+<svg width="1200" height="280" viewBox="0 0 1200 280" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#4c1d95"/>
+      <stop offset="45%" stop-color="#7e22ce"/>
+      <stop offset="100%" stop-color="#db2777"/>
+    </linearGradient>
+    <linearGradient id="title" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#fde68a"/>
+      <stop offset="50%" stop-color="#fca5a5"/>
+      <stop offset="100%" stop-color="#93c5fd"/>
+    </linearGradient>
+    <linearGradient id="flame" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#fde047"/>
+      <stop offset="60%" stop-color="#fb923c"/>
+      <stop offset="100%" stop-color="#f97316" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="1200" height="280" fill="url(#bg)"/>
+
+  <!-- confetti dots -->
+  <g opacity="0.8">
+    <circle cx="60" cy="40" r="4" fill="#fde047"/>
+    <circle cx="150" cy="80" r="3" fill="#60a5fa"/>
+    <circle cx="100" cy="150" r="3.5" fill="#f472b6"/>
+    <circle cx="200" cy="200" r="3" fill="#34d399"/>
+    <circle cx="40" cy="220" r="4" fill="#fb923c"/>
+    <circle cx="1140" cy="50" r="4" fill="#60a5fa"/>
+    <circle cx="1080" cy="100" r="3" fill="#fde047"/>
+    <circle cx="1150" cy="170" r="3.5" fill="#34d399"/>
+    <circle cx="1060" cy="220" r="3" fill="#f472b6"/>
+    <circle cx="1180" cy="230" r="4" fill="#fb923c"/>
+  </g>
+
+  <!-- sparkle stars -->
+  <g fill="#fde68a">
+    <path d="M980 50 l4 10 10 4 -10 4 -4 10 -4 -10 -10 -4 10 -4 z"/>
+    <path d="M1040 150 l3 7 7 3 -7 3 -3 7 -3 -7 -7 -3 7 -3 z"/>
+    <path d="M90 60 l3 7 7 3 -7 3 -3 7 -3 -7 -7 -3 7 -3 z"/>
+  </g>
+
+  <!-- rocket, blasting up and to the right -->
+  <g transform="translate(975,185) rotate(-35)">
+    <!-- flame -->
+    <path d="M-6 38 Q0 70 6 38 Q0 50 -6 38 Z" fill="url(#flame)"/>
+    <!-- fins -->
+    <path d="M-14 24 L-28 42 L-6 32 Z" fill="#fb7185"/>
+    <path d="M14 24 L28 42 L6 32 Z" fill="#fb7185"/>
+    <!-- body -->
+    <path d="M0 -46 C16 -30 16 10 10 32 L-10 32 C-16 10 -16 -30 0 -46 Z" fill="#f8fafc"/>
+    <!-- nose stripe -->
+    <path d="M0 -46 C9 -36 11 -18 11 0 L-11 0 C-11 -18 -9 -36 0 -46 Z" fill="#f87171"/>
+    <!-- window -->
+    <circle cx="0" cy="4" r="7" fill="#38bdf8" stroke="#f8fafc" stroke-width="2.5"/>
+  </g>
+
+  <!-- title -->
+  <text x="70" y="140" font-family="Helvetica Neue, Arial, sans-serif" font-size="64" font-weight="800" letter-spacing="-1" fill="url(#title)">Deployground</text>
+  <text x="73" y="178" font-family="Helvetica Neue, Arial, sans-serif" font-size="21" font-weight="500" fill="#f5f3ff">Pick a stack, hit submit, watch it go live — right from chat 🚀</text>
+</svg>
