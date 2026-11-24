@@ -57,9 +57,12 @@ def test_application_cr_per_component_has_labels_metadata_and_subscription_annot
     assert "resources-finalizer.argocd.argoproj.io" in meta["finalizers"]
     spec = app["spec"]
     assert spec["syncPolicy"]["automated"]["prune"] is True
-    assert spec["syncPolicy"]["managedNamespaceMetadata"]["labels"] == {
-        "deployground.io/managed": "true"
-    }
+    # Only the reserved `system` Application owns the namespace (see
+    # test_files_for_also_writes_the_reserved_system_application) -- a regular
+    # component never claims CreateNamespace/managedNamespaceMetadata, so it can't
+    # race `system` for ownership of the stack's namespace.
+    assert "syncOptions" not in spec["syncPolicy"]
+    assert "managedNamespaceMetadata" not in spec["syncPolicy"]
     assert spec["destination"] == {"name": "dev-cluster", "namespace": "demo"}
     sources = spec["sources"]
     assert len(sources) == 1
@@ -150,6 +153,11 @@ def test_files_for_also_writes_the_reserved_system_application():
     assert annotations["deployground.io/stack"] == "demo"
     assert annotations["deployground.io/owner"] == record("api").owner
     assert annotations["deployground.io/version"] == ""
+    # The reserved `system` Application is the sole owner of the namespace's lifecycle.
+    assert app["spec"]["syncPolicy"]["syncOptions"] == ["CreateNamespace=true"]
+    assert app["spec"]["syncPolicy"]["managedNamespaceMetadata"]["labels"] == {
+        "deployground.io/managed": "true"
+    }
 
 
 def test_delete_files_also_removes_the_reserved_system_application():
