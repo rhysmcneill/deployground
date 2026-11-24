@@ -66,6 +66,8 @@ Access is **default-deny** and scoped by Slack user, usergroup, or channel, per 
 
 ## Try it
 
+![Demo](docs/assets/demo.gif)
+
 ```
 ┌─ New deployment ────────────────┐
 │ Catalog:      [ my-catalog  ▾ ] │
