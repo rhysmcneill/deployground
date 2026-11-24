@@ -219,15 +219,19 @@ class ApplicationSetTarget:
                             ("server" if _is_url(cluster) else "name"): cluster,
                             "namespace": _ref("stack"),
                         },
-                        "syncPolicy": {
-                            "automated": {"prune": True, "selfHeal": True},
-                            "syncOptions": ["CreateNamespace=true"],
-                            # Labels every namespace this creates, so cluster-wide resources
-                            # (e.g. a ClusterExternalSecret provisioning a shared pull secret)
-                            # can target "any deployground-managed namespace" generically,
-                            # instead of needing one static resource per stack name.
-                            "managedNamespaceMetadata": {"labels": {LABEL_MANAGED: "true"}},
-                        },
+                        # No CreateNamespace/managedNamespaceMetadata here: this template is
+                        # shared by every component's generated Application, including the
+                        # reserved `system` one. The git-files generator can't vary syncPolicy
+                        # per matched file, so giving every component a namespace-creation
+                        # option would mean several Applications race to create/label the same
+                        # namespace -- one sync's render can decide it no longer "owns" the
+                        # namespace and prune it out from under the running stack. The
+                        # `system` component's golden-path-chart renders the namespace
+                        # explicitly (see its `namespaceOnly` values and namespace.yaml
+                        # template) and is the sole owner of the stack's namespace lifecycle;
+                        # other components simply sync into a namespace `system` already
+                        # created, retrying via selfHeal if their first sync lands first.
+                        "syncPolicy": {"automated": {"prune": True, "selfHeal": True}},
                     },
                 },
             },

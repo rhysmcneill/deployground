@@ -102,7 +102,19 @@ class ApplicationTarget:
         cluster: str,
         source: dict[str, Any],
         annotations: dict[str, str],
+        manage_namespace: bool,
     ) -> dict[str, Any]:
+        sync_policy: dict[str, Any] = {"automated": {"prune": True, "selfHeal": True}}
+        if manage_namespace:
+            sync_policy["syncOptions"] = ["CreateNamespace=true"]
+            # Labels the namespace this creates, so cluster-wide resources (e.g. a
+            # ClusterExternalSecret provisioning a shared pull secret) can target "any
+            # deployground-managed namespace" generically. Only the reserved `system`
+            # Application sets this: it's the sole owner of the stack's namespace
+            # lifecycle. If every component's Application also raced to create/label
+            # the same namespace, two Applications could disagree about whether they
+            # still "own" it on a given sync and prune it out from under the stack.
+            sync_policy["managedNamespaceMetadata"] = {"labels": {LABEL_MANAGED: "true"}}
         return {
             "apiVersion": "argoproj.io/v1alpha1",
             "kind": "Application",
@@ -121,14 +133,7 @@ class ApplicationTarget:
                 "project": "default",
                 "sources": [source],
                 "destination": {"name": cluster, "namespace": stack},
-                "syncPolicy": {
-                    "automated": {"prune": True, "selfHeal": True},
-                    "syncOptions": ["CreateNamespace=true"],
-                    # Labels every namespace this creates, so cluster-wide resources (e.g. a
-                    # ClusterExternalSecret provisioning a shared pull secret) can target "any
-                    # deployground-managed namespace" generically.
-                    "managedNamespaceMetadata": {"labels": {LABEL_MANAGED: "true"}},
-                },
+                "syncPolicy": sync_policy,
             },
         }
 
@@ -143,7 +148,9 @@ class ApplicationTarget:
         source = chart_source(self._cfg.workloadChart)
         source["helm"] = {"values": yaml.safe_dump({"namespaceOnly": True}, sort_keys=False)}
         annotations = to_annotations(record)
-        return self._app_manifest(stack, RESERVED_COMPONENT, cluster, source, annotations)
+        return self._app_manifest(
+            stack, RESERVED_COMPONENT, cluster, source, annotations, manage_namespace=True
+        )
 
     def _application(
         self,
@@ -184,4 +191,6 @@ class ApplicationTarget:
             source = chart_source(comp.chart)
         source["helm"] = {"values": yaml.safe_dump(values, sort_keys=False)}
         annotations = {**to_annotations(record), **subscribe_annotations()}
-        return self._app_manifest(stack, component, cluster, source, annotations)
+        return self._app_manifest(
+            stack, component, cluster, source, annotations, manage_namespace=False
+        )
