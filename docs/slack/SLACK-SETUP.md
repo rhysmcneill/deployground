@@ -26,7 +26,30 @@ And requests these bot scopes: `chat:write`, `commands`, `usergroups:read`, `use
 
 ---
 
-## 2. Generate the app-level token
+## 2. Set the app icon (optional)
+
+The manifest can't set this — the classic app manifest's `display_information` has no icon
+field at all. Slack's
+[`apps.icon.set`](https://docs.slack.dev/reference/methods/apps.icon.set/) does, and it accepts
+a public image `url`, so it can fetch
+[`docs/assets/slack-icon.png`](../assets/slack-icon.png) straight from this repo — no manual
+upload.
+
+1. Grab the app ID from the URL of the app's settings page: `api.slack.com/apps/<APP_ID>`.
+2. Get a **user token** with the `app_configurations:write` scope — **Basic Information** →
+   **App Configuration Tokens** (a different token from the app-level/bot tokens below).
+3. Set it:
+
+   ```bash
+   curl -X POST https://slack.com/api/apps.icon.set \
+     -H "Authorization: Bearer $SLACK_CONFIG_TOKEN" \
+     -d app_id=$SLACK_APP_ID \
+     -d url="https://raw.githubusercontent.com/rhysmcneill/deployground/main/docs/assets/slack-icon.png"
+   ```
+
+---
+
+## 3. Generate the app-level token
 
 1. **Basic Information** → **App-Level Tokens** → **Generate Token and Scopes**.
 2. Name it anything, add the `connections:write` scope.
@@ -35,14 +58,14 @@ And requests these bot scopes: `chat:write`, `commands`, `usergroups:read`, `use
 
 ---
 
-## 3. Install the app and get the bot token
+## 4. Install the app and get the bot token
 
 1. **Install App** → **Install to Workspace** → approve the permissions.
 2. Copy the **bot token** (`xoxb-...`) from the Install App page.
 
 ---
 
-## 4. Store both tokens
+## 5. Store both tokens
 
 Both tokens go into the Kubernetes Secret the Helm chart reads (see
 [Installing the bot](../install.md)), as `SLACK_APP_TOKEN` and `SLACK_BOT_TOKEN`:
