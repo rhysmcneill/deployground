@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.10.1](https://github.com/rhysmcneill/deployground/compare/deployground-v0.10.0...deployground-v0.10.1) (2026-11-24)
+
+
+### Bug Fixes
+
+* stop non-system component Applications from racing for namespace ownership ([#54](https://github.com/rhysmcneill/deployground/issues/54)) ([76720e1](https://github.com/rhysmcneill/deployground/commit/76720e160c6b14486b9530adac5e47732c1f5153))
+
 ## [0.10.0](https://github.com/rhysmcneill/deployground/compare/deployground-v0.9.0...deployground-v0.10.0) (2026-11-19)
 
 
