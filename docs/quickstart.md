@@ -1,6 +1,6 @@
 # Quickstart
 
-Deployground is a Slack bot that deploys through GitOps: it writes one config file per component
+Deployground is a bot that deploys through GitOps: it writes one config file per component i.e. service
 to your GitOps repo, and an Argo CD ApplicationSet turns each file into a running workload.
 
 You need: a Kubernetes cluster with Argo CD (and optionally Argo CD Notifications), a GitOps
