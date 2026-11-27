@@ -29,6 +29,7 @@ jobs:
             release
             infra
             docs
+            build
           requireScope: false
           subjectPattern: ^[a-z].+$
           subjectPatternError: |
