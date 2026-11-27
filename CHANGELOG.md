@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.11.0](https://github.com/rhysmcneill/deployground/compare/deployground-v0.10.1...deployground-v0.11.0) (2026-11-27)
+
+
+### Features
+
+* add Slack app icon, document setting it via apps.icon.set ([#56](https://github.com/rhysmcneill/deployground/issues/56)) ([35414c1](https://github.com/rhysmcneill/deployground/commit/35414c146b4a95c208ef6e52af7f9344a81cd87c))
+
 ## [0.10.1](https://github.com/rhysmcneill/deployground/compare/deployground-v0.10.0...deployground-v0.10.1) (2026-11-24)
 
 
